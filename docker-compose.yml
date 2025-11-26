@@ -1,0 +1,433 @@
+version: '3.8'
+
+services:
+  # Nginx как единая точка входа
+  nginx:
+    build:
+      context: ./nginx
+      dockerfile: Dockerfile
+    container_name: nginx
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf
+      - ./nginx/conf.d:/etc/nginx/conf.d
+    depends_on:
+      - user-service
+      - offer-service
+      - rental-cmd-service
+      - rental-query-service
+      - stations-adapter
+      - payments-adapter
+      - config-service
+      - tariff-service
+    networks:
+      - ${NETWORK_NAME}
+
+  # User Service (Auth & Profile)
+  user-service:
+    build:
+      context: ./src/user-service
+      dockerfile: Dockerfile
+    container_name: user-service
+    environment:
+      - DB_MASTER_HOST=user-db-master
+      - DB_REPLICA_HOST=user-db-replica
+      - DB_PORT=5432
+      - DB_NAME=${USER_DB_NAME}
+      - JWT_SECRET=${JWT_SECRET}
+      - SERVER_PORT=${USER_SERVICE_PORT}
+    depends_on:
+      - user-db-master
+      - user-db-replica
+    networks:
+      - ${NETWORK_NAME}
+
+  user-db-master:
+    image: postgres:14
+    container_name: user-db-master
+    environment:
+      - POSTGRES_DB=${USER_DB_NAME}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+    volumes:
+      - user_db_master_data:/var/lib/postgresql/data
+    networks:
+      - ${NETWORK_NAME}
+
+  user-db-replica:
+    image: postgres:14
+    container_name: user-db-replica
+    environment:
+      - POSTGRES_DB=${USER_DB_NAME}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+    command: |
+      postgres
+      -c hot_standby=on
+      -c primary_conninfo=host=user-db-master port=5432 user=${POSTGRES_REPLICA_USER} password=${POSTGRES_REPLICA_PASSWORD}
+    depends_on:
+      - user-db-master
+    volumes:
+      - user_db_replica_data:/var/lib/postgresql/data
+    networks:
+      - ${NETWORK_NAME}
+
+  # Offer & Pricing Service
+  offer-service:
+    build:
+      context: ./src/offer-service
+      dockerfile: Dockerfile
+    container_name: offer-service
+    environment:
+      - DB_MASTER_HOST=offer-db-master
+      - DB_REPLICA_HOST=offer-db-replica
+      - CONFIG_SERVICE_URL=http://config-service:${CONFIG_SERVICE_PORT}
+      - TARIFF_SERVICE_URL=http://tariff-service:${TARIFF_SERVICE_PORT}
+      - USER_SERVICE_URL=http://user-service:${USER_SERVICE_PORT}
+      - REDIS_SHARD0_URL=redis://:${REDIS_PASSWORD}@redis-shard0-master:6379
+      - REDIS_SHARD1_URL=redis://:${REDIS_PASSWORD}@redis-shard1-master:6379
+      - SERVER_PORT=${OFFER_SERVICE_PORT}
+    depends_on:
+      - offer-db-master
+      - offer-db-replica
+      - config-service
+      - tariff-service
+      - redis-shard0-master
+      - redis-shard1-master
+    networks:
+      - ${NETWORK_NAME}
+
+  offer-db-master:
+    image: postgres:14
+    container_name: offer-db-master
+    environment:
+      - POSTGRES_DB=${OFFER_DB_NAME}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+    volumes:
+      - offer_db_master_data:/var/lib/postgresql/data
+    networks:
+      - ${NETWORK_NAME}
+
+  offer-db-replica:
+    image: postgres:14
+    container_name: offer-db-replica
+    environment:
+      - POSTGRES_DB=${OFFER_DB_NAME}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+    command: |
+      postgres
+      -c hot_standby=on
+      -c primary_conninfo=host=offer-db-master port=5432 user=${POSTGRES_REPLICA_USER} password=${POSTGRES_REPLICA_PASSWORD}
+    depends_on:
+      - offer-db-master
+    volumes:
+      - offer_db_replica_data:/var/lib/postgresql/data
+    networks:
+      - ${NETWORK_NAME}
+
+  # Rental Command Service
+  rental-cmd-service:
+    build:
+      context: ./src/rental-cmd-service
+      dockerfile: Dockerfile
+    container_name: rental-cmd-service
+    environment:
+      - DB_MASTER_HOST=rental-cmd-db-master
+      - DB_REPLICA_HOST=rental-cmd-db-replica
+      - STATIONS_SERVICE_URL=http://stations-adapter:${STATIONS_ADAPTER_PORT}
+      - PAYMENTS_SERVICE_URL=http://payments-adapter:${PAYMENTS_ADAPTER_PORT}
+      - OFFER_SERVICE_URL=http://offer-service:${OFFER_SERVICE_PORT}
+      - SERVER_PORT=${RENTAL_CMD_SERVICE_PORT}
+    depends_on:
+      - rental-cmd-db-master
+      - rental-cmd-db-replica
+      - stations-adapter
+      - payments-adapter
+    networks:
+      - ${NETWORK_NAME}
+
+  rental-cmd-db-master:
+    image: postgres:14
+    container_name: rental-cmd-db-master
+    environment:
+      - POSTGRES_DB=${RENTAL_CMD_DB_NAME}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+    volumes:
+      - rental_cmd_master_data:/var/lib/postgresql/data
+    networks:
+      - ${NETWORK_NAME}
+
+  rental-cmd-db-replica:
+    image: postgres:14
+    container_name: rental-cmd-db-replica
+    environment:
+      - POSTGRES_DB=${RENTAL_CMD_DB_NAME}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+    command: |
+      postgres
+      -c hot_standby=on
+      -c primary_conninfo=host=rental-cmd-db-master port=5432 user=${POSTGRES_REPLICA_USER} password=${POSTGRES_REPLICA_PASSWORD}
+    depends_on:
+      - rental-cmd-db-master
+    volumes:
+      - rental_cmd_replica_data:/var/lib/postgresql/data
+    networks:
+      - ${NETWORK_NAME}
+
+  # Rental Query Service
+  rental-query-service:
+    build:
+      context: ./src/rental-query-service
+      dockerfile: Dockerfile
+    container_name: rental-query-service
+    environment:
+      - DB_MASTER_HOST=rental-query-db-master
+      - DB_REPLICA_HOST=rental-query-db-replica
+      - REDIS_SHARD0_URL=redis://:${REDIS_PASSWORD}@redis-shard0-master:6379
+      - REDIS_SHARD1_URL=redis://:${REDIS_PASSWORD}@redis-shard1-master:6379
+      - SERVER_PORT=${RENTAL_QUERY_SERVICE_PORT}
+    depends_on:
+      - rental-query-db-master
+      - rental-query-db-replica
+      - redis-shard0-master
+      - redis-shard1-master
+    networks:
+      - ${NETWORK_NAME}
+
+  rental-query-db-master:
+    image: postgres:14
+    container_name: rental-query-db-master
+    environment:
+      - POSTGRES_DB=${RENTAL_QUERY_DB_NAME}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+    volumes:
+      - rental_query_master_data:/var/lib/postgresql/data
+    networks:
+      - ${NETWORK_NAME}
+
+  rental-query-db-replica:
+    image: postgres:14
+    container_name: rental-query-db-replica
+    environment:
+      - POSTGRES_DB=${RENTAL_QUERY_DB_NAME}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+    command: |
+      postgres
+      -c hot_standby=on
+      -c primary_conninfo=host=rental-query-db-master port=5432 user=${POSTGRES_REPLICA_USER} password=${POSTGRES_REPLICA_PASSWORD}
+    depends_on:
+      - rental-query-db-master
+    volumes:
+      - rental_query_replica_data:/var/lib/postgresql/data
+    networks:
+      - ${NETWORK_NAME}
+
+  # Вспомогательные сервисы
+  stations-adapter:
+    build:
+      context: ./src/stations-adapter
+      dockerfile: Dockerfile
+    container_name: stations-adapter
+    environment:
+      - REDIS_SHARD0_URL=redis://:${REDIS_PASSWORD}@redis-shard0-master:6379
+      - REDIS_SHARD1_URL=redis://:${REDIS_PASSWORD}@redis-shard1-master:6379
+      - SERVER_PORT=${STATIONS_ADAPTER_PORT}
+    depends_on:
+      - redis-shard0-master
+      - redis-shard1-master
+    networks:
+      - ${NETWORK_NAME}
+
+  payments-adapter:
+    build:
+      context: ./src/payments-adapter
+      dockerfile: Dockerfile
+    container_name: payments-adapter
+    environment:
+      - SERVER_PORT=${PAYMENTS_ADAPTER_PORT}
+    networks:
+      - ${NETWORK_NAME}
+
+  config-service:
+    build:
+      context: ./src/config-service
+      dockerfile: Dockerfile
+    container_name: config-service
+    environment:
+      - DB_MASTER_HOST=config-db-master
+      - DB_REPLICA_HOST=config-db-replica
+      - SERVER_PORT=${CONFIG_SERVICE_PORT}
+    depends_on:
+      - config-db-master
+      - config-db-replica
+    networks:
+      - ${NETWORK_NAME}
+
+  config-db-master:
+    image: postgres:14
+    container_name: config-db-master
+    environment:
+      - POSTGRES_DB=${CONFIG_DB_NAME}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+    volumes:
+      - config_db_master_data:/var/lib/postgresql/data
+    networks:
+      - ${NETWORK_NAME}
+
+  config-db-replica:
+    image: postgres:14
+    container_name: config-db-replica
+    environment:
+      - POSTGRES_DB=${CONFIG_DB_NAME}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+    command: |
+      postgres
+      -c hot_standby=on
+      -c primary_conninfo=host=config-db-master port=5432 user=${POSTGRES_REPLICA_USER} password=${POSTGRES_REPLICA_PASSWORD}
+    depends_on:
+      - config-db-master
+    volumes:
+      - config_db_replica_data:/var/lib/postgresql/data
+    networks:
+      - ${NETWORK_NAME}
+
+  tariff-service:
+    build:
+      context: ./src/tariff-service
+      dockerfile: Dockerfile
+    container_name: tariff-service
+    environment:
+      - DB_MASTER_HOST=tariff-db-master
+      - DB_REPLICA_HOST=tariff-db-replica
+      - SERVER_PORT=${TARIFF_SERVICE_PORT}
+    depends_on:
+      - tariff-db-master
+      - tariff-db-replica
+    networks:
+      - ${NETWORK_NAME}
+
+  tariff-db-master:
+    image: postgres:14
+    container_name: tariff-db-master
+    environment:
+      - POSTGRES_DB=${TARIFF_DB_NAME}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+    volumes:
+      - tariff_db_master_data:/var/lib/postgresql/data
+    networks:
+      - ${NETWORK_NAME}
+
+  tariff-db-replica:
+    image: postgres:14
+    container_name: tariff-db-replica
+    environment:
+      - POSTGRES_DB=${TARIFF_DB_NAME}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+    command: |
+      postgres
+      -c hot_standby=on
+      -c primary_conninfo=host=tariff-db-master port=5432 user=${POSTGRES_REPLICA_USER} password=${POSTGRES_REPLICA_PASSWORD}
+    depends_on:
+      - tariff-db-master
+    volumes:
+      - tariff_db_replica_data:/var/lib/postgresql/data
+    networks:
+      - ${NETWORK_NAME}
+
+  # Redis шард 0
+  redis-shard0-master:
+    image: redis:7-alpine
+    container_name: redis-shard0-master
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD}
+    volumes:
+      - redis_shard0_master_data:/data
+    networks:
+      - ${NETWORK_NAME}
+
+  redis-shard0-replica:
+    image: redis:7-alpine
+    container_name: redis-shard0-replica
+    command: redis-server --replicaof redis-shard0-master 6379 --requirepass ${REDIS_PASSWORD} --masterauth ${REDIS_PASSWORD}
+    depends_on:
+      - redis-shard0-master
+    volumes:
+      - redis_shard0_replica_data:/data
+    networks:
+      - ${NETWORK_NAME}
+
+  # Redis шард 1
+  redis-shard1-master:
+    image: redis:7-alpine
+    container_name: redis-shard1-master
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD}
+    volumes:
+      - redis_shard1_master_data:/data
+    networks:
+      - ${NETWORK_NAME}
+
+  redis-shard1-replica:
+    image: redis:7-alpine
+    container_name: redis-shard1-replica
+    command: redis-server --replicaof redis-shard1-master 6379 --requirepass ${REDIS_PASSWORD} --masterauth ${REDIS_PASSWORD}
+    depends_on:
+      - redis-shard1-master
+    volumes:
+      - redis_shard1_replica_data:/data
+    networks:
+      - ${NETWORK_NAME}
+
+  # Мониторинг
+  prometheus:
+    image: prom/prometheus
+    container_name: prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+    networks:
+      - ${NETWORK_NAME}
+
+  grafana:
+    image: grafana/grafana
+    container_name: grafana
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    depends_on:
+      - prometheus
+    networks:
+      - ${NETWORK_NAME}
+
+volumes:
+  user_db_master_data:
+  user_db_replica_data:
+  offer_db_master_data:
+  offer_db_replica_data:
+  rental_cmd_master_data:
+  rental_cmd_replica_data:
+  rental_query_master_data:
+  rental_query_replica_data:
+  config_db_master_data:
+  config_db_replica_data:
+  tariff_db_master_data:
+  tariff_db_replica_data:
+  redis_shard0_master_data:
+  redis_shard0_replica_data:
+  redis_shard1_master_data:
+  redis_shard1_replica_data:
+
+networks:
+  ${NETWORK_NAME}:
+    driver: bridge
