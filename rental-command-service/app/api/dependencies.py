@@ -26,7 +26,13 @@ _rental_command_repository: Optional[RentalRepository] = None
 async def get_config_client() -> ConfigClient:
     global _config_client
     if _config_client is None:
-        _config_client = ConfigClient()
+        _config_client = ConfigClient(url="http://fake-config")
+        _config_client._cache = {
+            "offer_service_url": settings.OFFER_SERVICE_URL,
+            "stations_adapter_url": settings.STATIONS_SERVICE_URL,
+            "payments_adapter_url": settings.PAYMENTS_SERVICE_URL,
+        }
+        _config_client._expires_at = 9999999999
     return _config_client
 
 
