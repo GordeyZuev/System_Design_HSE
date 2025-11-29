@@ -11,7 +11,7 @@ class Settings(BaseSettings):
     app_name: str = "offer-pricing-service"
     app_version: str = "1.0.0"
     app_host: str = "0.0.0.0"
-    app_port: int = 8001
+    app_port: int = 8002
     log_level: str = "INFO"
 
     # Database
