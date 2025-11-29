@@ -88,7 +88,7 @@
 - 1000 RPS на `POST /rentals/start`.
 - 100x `GET /rentals/{id}` на одну аренду.
 
-#### Chaos
+#### Выпадение сервисов:
 - Отключение users → greedy pricing.
 - Отключение tariffs → ошибка.
 
