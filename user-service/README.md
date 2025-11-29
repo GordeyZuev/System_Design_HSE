@@ -2,6 +2,8 @@
 
 Сервис аутентификации и управления пользователями для системы аренды пауэрбанков.
 
+**Статус:** Прототип с in-memory хранилищем (для демонстрации/разработки)
+
 ## Быстрый старт
 
 ```bash
@@ -100,14 +102,18 @@ user-service/
 
 ## Хранилище
 
-Используется in-memory хранилище (для разработки/тестирования):
+**Тип БД:** In-memory (для прототипа/демонстрации)
 
-- `users` - основная информация о пользователях
-- `user_profiles` - профили пользователей
-- `user_segments` - сегменты пользователей (STANDARD, PREMIUM, VIP)
-- `refresh_tokens` - refresh токены
+**Структуры данных:**
+- `users(user_id, email, phone, password_hash, status, created_at)` - основная информация о пользователях
+- `user_profiles(user_id, name, extra_metadata_json)` - профили пользователей
+- `user_segments(user_id, segment, updated_at)` - сегменты пользователей (STANDARD, PREMIUM, VIP)
+- `refresh_tokens(token_id, user_id, expires_at, revoked)` - refresh токены
 
-**Важно:** После перезапуска сервиса все данные теряются.
+**Особенности:**
+- Простые in-memory словари для быстрого прототипирования
+- Данные не персистентны (теряются при перезапуске)
+- Для production потребуется миграция на PostgreSQL
 
 ## Запуск тестов
 
