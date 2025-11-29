@@ -2,16 +2,16 @@
 
 ### Архитектурный стиль
 
-Выбран подход **микросервисной архитектуры с выделенными доменами и CQRS**, без жёсткой зависимости всех запросов от одного сервиса.
+Выбран подход **микросервисной архитектуры с выделенными доменами и CQRS**, без единой точки отказа.
 
-Ключевые сервисы:
+#### Ключевые сервисы:
 
 - **API Gateway (nginx)** — единая точка входа, маршрутизирует запросы на нужный сервис.
-- **Offer & Pricing Service** — отвечает за офферы и прайсинг (использует внешние tariffs, config и обращается к User Service для сегментов/статусов), самодостаточный по чтению.
-- **Rental Command Service** — операции старта/завершения аренды (использует оффер и взаимодействует с внешними stations/payments). Также содержит эндпоинты для чтения арендов и текущей стоимости.
-- **User Service (Auth & Profile)** — аутентификация, авторизация, профили, сегменты пользователей. Другие сервисы обращаются к нему как к единому источнику правды по пользователям.
+- **Offer & Pricing Service** — отвечает за офферы и прайсинг (использует внешние tariffs, config и обращается к User Service для сегментов/статусов), может работать автономно для чтения.
+- **Rental Command Service** — операции старта/завершения аренды (использует оффер и взаимодействует с внешними stations/payments). Содержит эндпоинты для чтения арендов и текущей стоимости.
+- **User Service (Auth & Profile)** — аутентификация, авторизация, профили, сегменты пользователей. Единственный источник истины по пользователям для остальных сервисов.
 
-Горячие пути разделены:
+**Горячие пути разделены:**
 - создание оффера,
 - старт/финиш аренды,
 - чтение состояния аренды/стоимости — масштабируются независимо.
@@ -34,7 +34,7 @@
 - Валидация и использование офферов при старте аренды.
 - Контроль свежести оффера (expires_at, tariff_version).
 - Хранит `offers` и `offer_audit` в PostgreSQL.
-- **Fallback greedy pricing** — если при вычислении стоимости не может получить информацию от User Service (таймаут/ошибка), использует "жадный" тариф.
+
 
 #### Rental Command Service
 - Управляет жизненным циклом аренды (старт/финиш).
@@ -45,21 +45,19 @@
 
 #### User Service (Auth & Profile)
 - Аутентификация и авторизация через JWT.
-- Управление профилями пользователей.
-- Управление сегментами пользователей для персонализации тарифов.
+- Управление профилями и сегментами пользователей для персонализации тарифов.
 - **Хранилище:** In-memory (для прототипа/демонстрации).
 
 ### Данные и хранилище
-
-#### База данных (PostgreSQL)
 
 #### Контроль свежести оффера
 - Проверка `expires_at` и `tariff_version` при создании аренды.
 - Если оффер протух — HTTP 409 и новый оффер.
 
 #### Шардирование
-- Логическое по `user_id` или `station_region`.
-- Rental Service хранит mapping shard → connection.
+- Реализовано только в **Rental Command Service**.
+- По `user_id` (MD5 hash-based).
+- **Offer & Pricing Service** использует репликацию без шардирования.
 
 ### Нефункциональные требования
 
@@ -88,9 +86,6 @@
 - 1000 RPS на `POST /rentals/start`.
 - 100x `GET /rentals/{id}` на одну аренду.
 
-#### Выпадение сервисов:
-- Отключение users → greedy pricing.
-- Отключение tariffs → ошибка.
 
 ### Развёртывание
 
@@ -105,19 +100,19 @@
    - Все внутренние вызовы между сервисами идут по публичным contract-first API (HTTP/gRPC).
 
 2. **User Service (Auth & Profile)**
-   - Является **единственным источником истины по пользователям**.
+   - **Единственный источник истины по пользователям**.
    - Выдаёт JWT; остальные сервисы доверяют токену и клеймам.
 
 3. **Greedy pricing**
-   - Реализуется строго в **Offer & Pricing Service**.
+   - Реализовано в **Offer & Pricing Service**.
    - Условие активации: таймаут или ошибка обращения к User Service при расчёте прайсинга.
 
 4. **Tariffs / Config**
    - Tariffs и Config доступны только через соответствующие клиенты (адаптеры) с кэшем.
-   - При протухании TTL для тарифов всегда возвращается ошибка; использование устаревших тарифов запрещено (тогда кидаем default).
+   - При протухании TTL для тарифов всегда возвращается ошибка; использование устаревших тарифов запрещено (применяется default).
 
 5. **Stations / Payments**
-   - Tracing-критичные зависимости для команд аренды.
+   - Критичные зависимости для команд аренды (требуют трассировки).
    - При недоступности — операции старта аренды не выполняются.
 
 ---
@@ -143,45 +138,180 @@
 ### Offer & Pricing Service
 - **Тип БД:** PostgreSQL.
 - **Таблицы:**
-  - `offers(offer_id, user_id, station_id, tariff_snapshot_json, created_at, expires_at, status)`
-  - `offer_audit(id, offer_id, event_type, ts, payload_json)`
-- **Особенности:**
-  - В `tariff_snapshot_json` фиксируется ставка/правила, по которым потом считается аренда.
-  - `expires_at` используется для контроля свежести.
+
+**`offers`:**
+- `offer_id` (UUID, PK)
+- `user_id` (UUID, NOT NULL, INDEX)
+- `station_id` (VARCHAR(255), NOT NULL, INDEX)
+- `tariff_snapshot` (JSON, NOT NULL) — ставка/правила для расчёта стоимости
+- `created_at` (TIMESTAMP, NOT NULL, INDEX)
+- `expires_at` (TIMESTAMP, NOT NULL, INDEX)
+- `status` (ENUM: ACTIVE, USED, EXPIRED, NOT NULL, INDEX)
+- `tariff_version` (VARCHAR(50), NULLABLE)
+- Индексы: `(user_id, status)`, `(status, expires_at)`
+
+**`offer_audit`:**
+- `id` (UUID, PK)
+- `offer_id` (UUID, NOT NULL, INDEX)
+- `event_type` (VARCHAR(50), NOT NULL)
+- `ts` (TIMESTAMP, NOT NULL, INDEX)
+- `payload_json` (JSON, NULLABLE)
+- Индекс: `(offer_id, ts)`
+
+- **API Endpoints:**
+
+- `POST /internal/offers` — создать оффер
+  - Request: `{user_id: UUID, station_id: str, user_segment: str?}`
+  - Response: `{offer_id: UUID, expires_at: datetime, tariff_details: {...}, estimated_rate_per_minute: float, currency: str}`
+  - Errors: 503 (Tariff Service недоступен), 500 (БД ошибка)
+
+- `GET /internal/offers/{offer_id}` — получить оффер
+  - Query params: `user_id: UUID?`
+  - Response: `{offer_id: UUID, user_id: UUID, station_id: str, tariff_snapshot: {...}, expires_at: datetime, status: str}`
+  - Errors: 404 (оффер не найден), 500 (БД ошибка)
+
+- `POST /internal/offers/{offer_id}/validate` — валидировать и использовать оффер
+  - Query params: `user_id: UUID`
+  - Response: `{offer_id: UUID, tariff_snapshot: {...}, expires_at: datetime}`
+  - Errors: 404 (оффер не найден), 409 (оффер истёк/уже использован), 500 (БД ошибка)
 - **Репликация:**
-  - 1 primary для записи, 1..N read-replicas для чтения офферов.
-- **Шардирование:**
-  - Логическое по `user_id`:
-    - `shard = hash(user_id) mod N`.
-    - Каждый шард — БД-инстанс.
+  - 1 primary для записи, 1 read-replica для чтения офферов.
+- **Шардирование:** Не используется. Одна БД с репликацией.
 
 ### Rental Command Service
 - **Тип БД:** PostgreSQL, логически отделён от Offer.
 - **Таблицы:**
-  - `rentals(rental_id, offer_id, user_id, station_id, started_at, finished_at, status)`
-  - `rental_events(event_id, rental_id, ts, type, payload_json)`
-  - `rental_cost_snapshots(rental_id, ts, cost_amount, details_json)` — агрегированные стоимости.
-  - `outbox_payments(id, rental_id, operation, amount, status, payload_json, created_at)` — для интеграции с Payments.
-- **Эндпоинты:**
-  - Command: `POST /internal/rentals/start`, `POST /internal/rentals/{rental_id}/finish`
-  - Query: `GET /internal/rentals/{rental_id}` — чтение аренды и текущей стоимости
-- **Репликация:**
-  - Primary для команд, read-реплики для запросов на чтение.
-- **Шардирование:**
-  - По `user_id`.
 
+**`rentals`:**
+- `rental_id` (UUID, PK)
+- `offer_id` (UUID, NOT NULL, INDEX)
+- `user_id` (UUID, NOT NULL, INDEX)
+- `station_id` (VARCHAR, NOT NULL)
+- `started_at` (TIMESTAMP WITH TIME ZONE, NOT NULL)
+- `finished_at` (TIMESTAMP WITH TIME ZONE, NULLABLE)
+- `status` (ENUM: PENDING, ACTIVE, FINISHED, CANCELLED, NOT NULL)
+- `tariff_snapshot` (JSON, NOT NULL) — копия из оффера
+- `tariff_version` (VARCHAR, NULLABLE)
+
+**`rental_events`:**
+- `event_id` (UUID, PK)
+- `rental_id` (UUID, NOT NULL, FK → rentals.rental_id, INDEX)
+- `ts` (TIMESTAMP WITH TIME ZONE, NOT NULL)
+- `type` (VARCHAR, NOT NULL) — rental_started, rental_finished, etc.
+- `payload` (JSON, NULLABLE)
+
+**`rental_cost_snapshots`:**
+- `id` (UUID, PK)
+- `rental_id` (UUID, NOT NULL, FK → rentals.rental_id, INDEX)
+- `ts` (TIMESTAMP WITH TIME ZONE, NOT NULL)
+- `cost_amount` (NUMERIC(10, 2), NOT NULL)
+- `details` (JSON, NULLABLE)
+
+**`payment_outbox`:**
+- `id` (UUID, PK)
+- `rental_id` (UUID, NOT NULL)
+- `amount` (NUMERIC, NOT NULL)
+- `created_at` (TIMESTAMP, NOT NULL)
+- `processed` (BOOLEAN, DEFAULT FALSE)
+- **API Endpoints:**
+
+**Command endpoints:**
+- `POST /internal/rentals/start` — создать аренду
+  - Request: `{offer_id: UUID}`
+  - Response: `{rental_id: UUID, started_at: datetime, status: str}`
+  - Errors: 409 (оффер истёк/использован), 503 (Stations недоступен), 500 (БД ошибка)
+
+- `POST /internal/rentals/{rental_id}/finish` — завершить аренду
+  - Request: `{station_id: str}`
+  - Response: `{rental_id: UUID, finished_at: datetime, final_cost: float, status: str}`
+  - Errors: 404 (аренда не найдена), 409 (неверный user_id/статус), 503 (Stations недоступен), 500 (БД ошибка)
+
+**Query endpoints:**
+- `GET /internal/rentals/{rental_id}` — получить информацию об аренде и текущей стоимости
+  - Response: `{rental_id: UUID, status: str, station_id: str, started_at: datetime, finished_at: datetime?, current_cost: float}`
+  - Errors: 404 (аренда не найдена), 403 (неверный user_id)
+- **Репликация:**
+  - Primary для команд, read-реплика для запросов на чтение.
+- **Шардирование:**
+  - По `user_id` (hash-based).
+  - Формула: `shard_index = int(md5(user_id).hexdigest(), 16) % len(SHARDS)`
+  - Текущая конфигурация: 2 шарда (DB_URL_SHARD_0, DB_URL_SHARD_1)
+  - Шарды загружаются из переменных окружения DB_URL_SHARD_*
+
+
+---
+
+## Надежность 
+
+### Rental Command Service
+
+При недоступности внешних сервисов (Offer Service, Stations Adapter) или ошибке чтения/записи выбрасываются исключения и происходит откат БД — все операции в атомарных транзакциях.
+
+Если на любом этапе start_rental или finish_rental внешний сервис недоступен/возвращает ошибку, выбрасывается исключение. Операция в транзакции, поэтому происходит полный откат. Аренда не создаётся/не завершается, состояние консистентно, клиент получает 4xx или 5xx.
+
+Ошибка на уровне ORM/БД (потеря соединения, нарушение ограничений) приводит к выбросу исключения. Операция в транзакции, поэтому все изменения отменяются, состояние БД остаётся неизменным. 
+
+Операция finish_rental считается успешной только если выполнены все шаги:
+1. Чтение сущности аренды по rental_id
+2. Проверка совпадения user_id запроса и user_id из записи в БД
+3. Проверка статуса аренды (ACTIVE)
+4. Успешный вызов Stations Adapter (return_powerbank)
+5. Успешное обновление записи в rentals (установка finished_at, статуса, итоговой стоимости)
+6. Запись события в rental_events
+7. Создание записи в outbox_payments
+
+Если любая из операций завершается ошибкой, вся транзакция откатывается: аренда остается в статусе ACTIVE, запись в outbox не появляется, клиент получает ошибку.
+
+Одна транзакция на весь процесс гарантирует атомарность: операции не могут быть частично применены, состояние либо в исходной точке, либо полностью обновлено.
+
+
+### Offer & Pricing Service
+
+Сервис имеет три внешние зависимости с разными стратегиями обработки отказов:
+
+**1. User Service (некритичная зависимость)**
+- **Timeout:** 2 секунды
+- **Retry:** нет (быстрый fail)
+- **Fallback:** Greedy Pricing
+- **Поведение при отказе:** Сервис продолжает работать, создавая офферы с максимальным тарифом.
+
+**2. Tariff Service (критичная зависимость)**
+- **Timeout:** 3 секунды
+- **Retry:** нет
+- **Cache:** LRU + TTL (10 минут, размер 1000 записей)
+- **Поведение при отказе:** 
+  - Cache HIT — сервис работает нормально
+  - Cache MISS + ошибка Tariff Service — HTTP 503, оффер не создаётся
+
+**3. Config Service (некритичная зависимость)**
+- **Timeout:** 1 секунда
+- **Cache:** TTL 60 секунд с auto-refresh
+- **Поведение при отказе:** Используется закэшированная конфигурация. При полном отсутствии конфига применяются дефолтные значения (offer_ttl=300s).
+
+**Операции с БД:**
+- Все операции создания/обновления офферов выполняются в транзакциях PostgreSQL
+- При ошибке записи в БД (потеря соединения, constraint violation) транзакция откатывается
+- Клиент получает HTTP 500, оффер не создаётся
+- Audit log записывается в отдельной транзакции (best effort — не блокирует основную операцию)
+
+**Валидация оффера (endpoint для Rental Service):**
+- Атомарная операция: проверка статуса + обновление на USED
+- При конфликте — HTTP 409, при отсутствии оффера — HTTP 404
+
+
+**Итог:** Плавная деградация при недоступности User Service, работа из кэша при проблемах с Config, отказ в создании офферов при недоступности Tariff Service.
 
 ---
 
 ## Use-case потоки
 
-Ниже описаны ключевые сценарии целиком
+Ключевые сценарии:
 
 ### 1. Аутентификация и получение токена
 1. Client → **User Service**: `POST /auth/login {email, password}`.
 2. User Service валидирует пользователя и возвращает:
    - `access_token` (JWT с `sub=user_id`, `segment`, `roles`).
-3. Client во всех последующих запросах передаёт `Authorization: Bearer <access_token>`.
+3. Client в последующих запросах передаёт `Authorization: Bearer <access_token>`.
 
 ### 2. Создание оффера аренды
 1. Client → **API Gateway**: `POST /offers {station_id}` + JWT.
@@ -193,7 +323,7 @@
 4. Offer & Pricing Service:
    - Читает актуальный config из кэша.
    - Читает tariffs через LRU-кэш; при miss — запрашивает Tariffs Service.
-   - При необходимости запрашивает User Service для уточнения сегмента.
+   - При необходимости — запрос к User Service для уточнения сегмента.
    - При недоступности User Service применяет greedy pricing.
    - Формирует `tariff_snapshot_json` и `expires_at`.
    - Создаёт запись в `offers`.
@@ -206,7 +336,7 @@
    - `user_id` из токена,
    - `offer_id`.
 3. Rental Command Service:
-   - Читает оффер из **Offer & Pricing Service API** только через API.
+   - Читает оффер из **Offer & Pricing Service** через API.
    - Проверяет:
      - `expires_at >= now`,
      - статус оффера `ACTIVE`.
@@ -219,7 +349,7 @@
 1. Client → **API Gateway**: `POST /rentals/{rental_id}/finish {station_id}` + JWT.
 2. Gateway → **Rental Command Service**.
 3. Rental Command Service:
-   - Валидирует, что `user_id` совпадает.
+   - Проверяет совпадение `user_id`.
    - Вычисляет стоимость по `tariff_snapshot_json` оффера + фактическому времени.
    - Вызывает **Stations Adapter**: `POST /stations/return {station_id, rental_id}`.
    - Создаёт запись в `outbox_payments` на списание.
@@ -254,7 +384,7 @@
   - LRU-кэш по ключу (station_id, tariff_type, segment).
   - TTL (по умолчанию 10 минут, конфигурируемый).
   - При истекшем TTL выполняет запрос к Tariffs Service.
-  - Если запрос неуспешен → возвращает ошибку; оффер не создаётся.
+  - Если запрос завершился ошибкой — возвращает ошибку, оффер не создаётся.
 
 #### Fallback: Greedy Pricing
 - Активируется в **Offer & Pricing Service** при недоступности User Service.
@@ -265,6 +395,94 @@
 
 ---
 
-
 ## Архитектура
-![Архитектура системы](docs/design.png) 
+![Архитектура системы](docs/design.png)
+
+---
+
+## Рассмотренные альтернативы
+
+### Архитектурный стиль
+
+**Альтернатива: Монолитная архитектура**
+
+**Плюсы:**
+- Простота разработки (один репозиторий)
+- ACID транзакции между офферами и арендами
+- Быстрый старт MVP
+- Проще отладка
+
+**Минусы:**
+- Невозможность независимого масштабирования (офферы создаются чаще, чем завершаются аренды)
+- Единая точка отказа
+- Разный профиль нагрузки: офферы (CPU-bound, кэш, внешние вызовы) vs аренды (IO-bound, транзакции)
+- Сложность поддержки при росте команды
+
+**Сравнение:**
+
+| Критерий | Монолит | Микросервисы (выбран) |
+|----------|---------|----------------------|
+| Масштабирование | Единое, нельзя масштабировать части независимо | Независимое: офферы (CPU-bound) и аренды (IO-bound) отдельно |
+| Производительность | Ограничена единой точкой | 1000 RPS на старт, 100x чтений — достижимо |
+| Надёжность | Единая точка отказа | Изоляция отказов по доменам |
+| Разработка | Проще (один репозиторий) | Сложнее, но команда может работать параллельно |
+| Транзакции | ACID между офферами и арендами | Транзакции внутри сервиса, eventual consistency между сервисами |
+
+**Вывод:** Выбрана микросервисная архитектура с разделением Offer и Rental для независимого масштабирования (1000 RPS на старт аренды, 100x чтений).
+
+---
+
+### Выбор базы данных
+
+**Альтернатива 1: Managed PostgreSQL**
+
+**Плюсы:**
+- Автоматические бэкапы и point-in-time recovery
+- Автоматическое масштабирование storage
+- Managed репликация и failover
+- Мониторинг из коробки
+
+**Минусы:**
+- Высокая стоимость для учебного проекта
+- Vendor lock-in
+- Сложность локальной разработки (нужны credentials, VPN)
+- Для MVP избыточно
+
+**Альтернатива 2: NoSQL (MongoDB, DynamoDB, Cassandra)**
+
+**Плюсы:**
+- Горизонтальное масштабирование "из коробки"
+- Гибкая схема (tariff_snapshot как JSON без миграций)
+- Высокая доступность
+
+**Минусы:**
+- Отсутствие ACID транзакций (критично для `validate_and_use_offer` — race condition)
+- Сложность обеспечения консистентности (оффер ACTIVE в USED должно быть атомарным)
+- Eventual consistency не подходит для критичных операций (старт аренды)
+
+**Сравнение:**
+
+| Критерий | Managed PostgreSQL | NoSQL | Self-hosted PostgreSQL (выбран) |
+|----------|-------------------|-------|--------------------------------|
+| ACID транзакции | Да | Нет | Да |
+| Консистентность | Строгая | Eventual | Строгая |
+| Горизонтальное масштабирование | Через реплики | Да | Через шардирование |
+| Управление | Автоматическое | Managed | Ручное |
+| Стоимость | Высокая | Средняя | Нулевая (MVP) |
+| Локальная разработка | Сложная | Средняя | Простая (docker-compose) |
+| Vendor lock-in | Есть | Есть | Нет |
+| Критичные операции | SELECT FOR UPDATE | Race conditions | SELECT FOR UPDATE |
+
+**Вывод:** Выбран self-hosted PostgreSQL в Docker. NoSQL отклонён из-за отсутствия ACID транзакций. Managed PostgreSQL отклонён из-за высокой стоимости и сложности локальной разработки.
+
+**Trade-off:** Принимаем необходимость ручного управления репликацией и бэкапами в обмен на контроль и нулевую стоимость для MVP.
+
+---
+
+### Стратегия шардирования
+
+TODO: Детальное описание стратегии шардирования с расчетами объемов данных и планом роста.
+
+**Текущее состояние:**
+- Шардирование реализовано только в **Rental Command Service** (2 шарда по `user_id`).
+- **Offer & Pricing Service** использует репликацию без шардирования. 
