@@ -37,21 +37,18 @@ class RentalService:
                 offer = await self.offer_client.validate_offer(str(offer_id), str(user_id))
                 
                 if offer.get("status") != "ACTIVE":
-                    print("NOT ACTIVE")
                     raise OfferNotActiveException(str(offer_id))
 
                 expires_at = offer.get("expires_at")
                 if not expires_at:
-                    print("2")
                     raise ExpireAtNotFoundException(str(offer_id))
 
                 existing_rental = await self.repo.get_by_user_id(user_id)
                 if existing_rental:
-                    print("3")
+                    
                     raise UserAlreadyRentException(str(user_id), str(offer_id))
 
                 if offer.get("user_id") != str(user_id):
-                    print("4")
                     raise OfferNotBelongUserException(str(user_id), str(offer_id))
 
                 expires_dt = parser.isoparse(expires_at)
@@ -59,17 +56,14 @@ class RentalService:
                     expires_dt = expires_dt.replace(tzinfo=timezone.utc)
 
                 if expires_dt < datetime.now(timezone.utc):
-                    print("5")
                     raise OfferExpiredException(str(offer_id))
 
                 station_id = offer.get("station_id")
                 if not station_id:
-                    print("6")
                     raise StationIdMissedException(str(offer_id))
 
                 existing_offer_rental = await self.repo.get_by_offer_id_active(offer_id)
                 if existing_offer_rental:
-                    print("7")
                     return existing_offer_rental
 
                 st_resp = await self.stations_adapter.reserve_or_issue(
