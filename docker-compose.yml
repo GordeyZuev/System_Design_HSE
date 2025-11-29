@@ -4,8 +4,8 @@ services:
   # Nginx как единая точка входа
   nginx:
     build:
-      context: ./nginx
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: ./nginx/Dockerfile
     container_name: nginx
     ports:
       - "80:80"
@@ -13,18 +13,17 @@ services:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf
       - ./nginx/conf.d:/etc/nginx/conf.d
     depends_on:
-      - user-service
+     # - user-service
       - offer-service
       - rental-cmd-service
-    networks:
-      - ${NETWORK_NAME}
 
   # User Service (Auth & Profile)
   user-service:
     build:
-      context: ./src/user-service
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: ./user-service/Dockerfile
     container_name: user-service
+    profiles: ["skip"]
     environment:
      # - DB_MASTER_HOST=user-db-master
      # - DB_REPLICA_HOST=user-db-replica
@@ -32,19 +31,14 @@ services:
      # - DB_NAME=${USER_DB_NAME}
       - JWT_SECRET=${JWT_SECRET}
      # - SERVER_PORT=${USER_SERVICE_PORT}
-    depends_on:
-      - user-db-master
-      - user-db-replica
-    networks:
-      - ${NETWORK_NAME}
 
 
 
   # Offer & Pricing Service
   offer-service:
     build:
-      context: ./src/offer-service
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: ./offer-pricing-service/Dockerfile
     container_name: offer-service
     environment:
       - DB_MASTER_HOST=offer-db-master
@@ -58,12 +52,6 @@ services:
     depends_on:
       - offer-db-master
       - offer-db-replica
-      - config-service
-      - tariff-service
-      - redis-shard0-master
-      - redis-shard1-master
-    networks:
-      - ${NETWORK_NAME}
 
   offer-db-master:
     image: postgres:14
@@ -74,8 +62,6 @@ services:
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
     volumes:
       - offer_db_master_data:/var/lib/postgresql/data
-    networks:
-      - ${NETWORK_NAME}
 
   offer-db-replica:
     image: postgres:14
@@ -92,14 +78,12 @@ services:
       - offer-db-master
     volumes:
       - offer_db_replica_data:/var/lib/postgresql/data
-    networks:
-      - ${NETWORK_NAME}
 
   # Rental Command Service
   rental-cmd-service:
     build:
-      context: ./src/rental-cmd-service
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: ./rental-command-service/Dockerfile
     container_name: rental-cmd-service
     environment:
       - DB_MASTER_HOST=rental-cmd-db-master
@@ -111,10 +95,6 @@ services:
     depends_on:
       - rental-cmd-db-master
       - rental-cmd-db-replica
-      - stations-adapter
-      - payments-adapter
-    networks:
-      - ${NETWORK_NAME}
 
   rental-cmd-db-master:
     image: postgres:14
@@ -125,8 +105,6 @@ services:
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
     volumes:
       - rental_cmd_master_data:/var/lib/postgresql/data
-    networks:
-      - ${NETWORK_NAME}
 
   rental-cmd-db-replica:
     image: postgres:14
@@ -143,8 +121,6 @@ services:
       - rental-cmd-db-master
     volumes:
       - rental_cmd_replica_data:/var/lib/postgresql/data
-    networks:
-      - ${NETWORK_NAME}
 
   # Rental Query Service
 
@@ -166,8 +142,6 @@ services:
       - "9090:9090"
     volumes:
       - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
-    networks:
-      - ${NETWORK_NAME}
 
   grafana:
     image: grafana/grafana
@@ -178,8 +152,6 @@ services:
       - GF_SECURITY_ADMIN_PASSWORD=admin
     depends_on:
       - prometheus
-    networks:
-      - ${NETWORK_NAME}
 
 volumes:
   offer_db_master_data:
@@ -187,6 +159,3 @@ volumes:
   rental_cmd_master_data:
   rental_cmd_replica_data:
 
-networks:
-  ${NETWORK_NAME}:
-    driver: bridge
