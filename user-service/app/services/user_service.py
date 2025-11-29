@@ -81,3 +81,28 @@ class UserService:
         logger.info(f"Retrieved user info for {user_id}")
         return user_info
 
+    async def get_all_users(self) -> list[UserInfo]:
+        """Get all users information."""
+        users = await self.user_repository.get_all()
+        result = []
+
+        for user in users:
+            segment_model = await self.user_segment_repository.get_by_user_id(
+                user.user_id
+            )
+            segment = (
+                segment_model.segment if segment_model else UserSegment.STANDARD
+            )
+
+            user_info = UserInfo(
+                user_id=user.user_id,
+                email=user.email,
+                segment=segment,
+                status=user.status.value,
+                phone=user.phone,
+            )
+            result.append(user_info)
+
+        logger.info(f"Retrieved {len(result)} users")
+        return result
+

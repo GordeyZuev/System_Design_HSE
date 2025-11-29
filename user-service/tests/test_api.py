@@ -20,11 +20,6 @@ from app.domain.exceptions import (
     InvalidCredentialsException,
     UserNotFoundException,
 )
-from app.infrastructure.repositories_inmemory import (
-    InMemoryUserProfileRepository,
-    InMemoryUserRepository,
-    InMemoryUserSegmentRepository,
-)
 from app.services.auth_service import AuthService
 from app.services.user_service import UserService
 from app.infrastructure.jwt_handler import JWTHandler
@@ -194,6 +189,69 @@ async def test_get_user_success(
 
 
 @pytest.mark.asyncio
+async def test_get_all_users_success(
+    client: TestClient,
+    mock_user_service: AsyncMock,
+    mock_user_id: UUID,
+) -> None:
+    """Test get all users endpoint success."""
+    # Arrange
+    from app.domain.models import UserInfo, UserSegment
+
+    mock_users_info = [
+        UserInfo(
+            user_id=mock_user_id,
+            email="test1@example.com",
+            segment=UserSegment.STANDARD,
+            status="ACTIVE",
+            phone="+1234567890",
+        ),
+        UserInfo(
+            user_id=UUID("550e8400-e29b-41d4-a716-446655440001"),
+            email="test2@example.com",
+            segment=UserSegment.PREMIUM,
+            status="ACTIVE",
+            phone="+1234567891",
+        ),
+    ]
+    mock_user_service.get_all_users = AsyncMock(return_value=mock_users_info)
+
+    # Act
+    response = client.get("/api/v1/users")
+
+    # Assert
+    assert response.status_code == 200
+    data = response.json()
+    assert "users" in data
+    assert "total" in data
+    assert data["total"] == 2
+    assert len(data["users"]) == 2
+    assert data["users"][0]["email"] == "test1@example.com"
+    assert data["users"][1]["email"] == "test2@example.com"
+
+
+@pytest.mark.asyncio
+async def test_get_all_users_empty(
+    client: TestClient,
+    mock_user_service: AsyncMock,
+) -> None:
+    """Test get all users with empty list."""
+    # Arrange
+    mock_user_service.get_all_users = AsyncMock(return_value=[])
+
+    # Act
+    response = client.get("/api/v1/users")
+
+    # Assert
+    assert response.status_code == 200
+    data = response.json()
+    assert "users" in data
+    assert "total" in data
+    assert data["total"] == 0
+    assert data["users"] == []
+
+
+@pytest.mark.asyncio
 async def test_get_user_not_found(
     client: TestClient,
     mock_user_service: AsyncMock,
@@ -329,46 +387,5 @@ async def test_login_missing_fields(client: TestClient) -> None:
 
     # Assert
     assert response.status_code == 422  # Validation error
-
-
-@pytest.mark.asyncio
-async def test_create_test_user_success(
-    client: TestClient,
-    in_memory_user_repository: InMemoryUserRepository,
-    in_memory_user_profile_repository: InMemoryUserProfileRepository,
-    in_memory_user_segment_repository: InMemoryUserSegmentRepository,
-) -> None:
-    """Test creating test user via dev endpoint."""
-    from app.api.dependencies import (
-        get_user_repository,
-        get_user_profile_repository,
-        get_user_segment_repository,
-    )
-
-    # Override dependencies with real repositories
-    app.dependency_overrides[get_user_repository] = (
-        lambda: in_memory_user_repository
-    )
-    app.dependency_overrides[get_user_profile_repository] = (
-        lambda: in_memory_user_profile_repository
-    )
-    app.dependency_overrides[get_user_segment_repository] = (
-        lambda: in_memory_user_segment_repository
-    )
-
-    # Act
-    response = client.post("/dev/create-test-user")
-
-    # Assert
-    assert response.status_code == 200
-    data = response.json()
-    assert data["message"] == "Test user created successfully"
-    assert "user_id" in data
-    assert data["email"] == "test@example.com"
-    assert data["password"] == "testpassword123"
-    assert data["segment"] == "STANDARD"
-
-    app.dependency_overrides.clear()
-
 
 

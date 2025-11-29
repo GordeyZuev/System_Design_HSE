@@ -2,6 +2,8 @@
 
 Сервис аутентификации и управления пользователями для системы аренды пауэрбанков.
 
+**Статус:** Прототип с in-memory хранилищем (для демонстрации/разработки)
+
 ## Быстрый старт
 
 ```bash
@@ -33,30 +35,27 @@ uvicorn app.main:app --host 0.0.0.0 --port 8081
   - Request: `{token}`
   - Response: `{valid, user_id?, segment?, roles?}`
 
-### Dev (для разработки)
-
-- `POST /dev/create-test-user` - Создание тестового пользователя
-  - Response: `{message, user_id, email, password, segment}`
+- `GET /api/v1/users` - Получение списка всех пользователей
+  - Response: `[{user_id, email, segment, status, phone}, ...]`
 
 ### Мониторинг
 
 - `GET /health` - Health check
 - `GET /metrics` - Prometheus метрики
 
-## Тестирование
+## Тестовые пользователи
 
-### Создание тестового пользователя
+При старте сервиса автоматически создаются 5 тестовых пользователей:
 
-```bash
-curl -X POST http://localhost:8081/dev/create-test-user
-```
+| Email | Password | Segment |
+|-------|----------|---------|
+| test1@example.com | testpassword123 | STANDARD |
+| test2@example.com | testpassword123 | PREMIUM |
+| test3@example.com | testpassword123 | VIP |
+| test4@example.com | testpassword123 | STANDARD |
+| test5@example.com | testpassword123 | PREMIUM |
 
-Создаст пользователя:
-- Email: `test@example.com`
-- Password: `testpassword123`
-- Segment: `STANDARD`
-
-### Примеры запросов
+## Примеры запросов
 
 **Логин:**
 ```bash
@@ -100,14 +99,18 @@ user-service/
 
 ## Хранилище
 
-Используется in-memory хранилище (для разработки/тестирования):
+**Тип БД:** In-memory (для прототипа/демонстрации)
 
-- `users` - основная информация о пользователях
-- `user_profiles` - профили пользователей
-- `user_segments` - сегменты пользователей (STANDARD, PREMIUM, VIP)
-- `refresh_tokens` - refresh токены
+**Структуры данных:**
+- `users(user_id, email, phone, password_hash, status, created_at)` - основная информация о пользователях
+- `user_profiles(user_id, name, extra_metadata_json)` - профили пользователей
+- `user_segments(user_id, segment, updated_at)` - сегменты пользователей (STANDARD, PREMIUM, VIP)
+- `refresh_tokens(token_id, user_id, expires_at, revoked)` - refresh токены
 
-**Важно:** После перезапуска сервиса все данные теряются.
+**Особенности:**
+- Простые in-memory словари для быстрого прототипирования
+- Данные не персистентны (теряются при перезапуске)
+- Для production потребуется миграция на PostgreSQL
 
 ## Запуск тестов
 
