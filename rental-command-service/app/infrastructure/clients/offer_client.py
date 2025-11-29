@@ -11,15 +11,13 @@ def _client():
 
 
 class OfferClient:
-    def __init__(self, cfg_client):
-        self.cfg = cfg_client
-
+    def __init__(self):
+        self.base = settings.OFFER_SERVICE_URL
+    
     async def validate_offer(
         self, offer_id: str, user_id: str
     ) -> Dict[str, Any]:
-        cfg = await self.cfg.get_config()
-        base = cfg["offer_service_url"].rstrip("/")
-        url = f"{base}/{offer_id}/validate"
+        url = f"{self.base}/{offer_id}/validate"
 
         async with _client() as c:
             r = await c.post(url, params={"user_id": user_id})

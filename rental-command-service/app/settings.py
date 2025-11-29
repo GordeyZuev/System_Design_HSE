@@ -8,12 +8,10 @@ class Settings(BaseSettings):
     PAYMENTS_SERVICE_URL: AnyHttpUrl
     OFFER_SERVICE_URL: AnyHttpUrl
     SERVICE_PORT: int = Field(8001, env="SERVER_PORT")
-    CONFIG_TTL_SECONDS: int = 60
     OUTBOX_POLL_INTERVAL_SECONDS: int = 5
     HTTP_TIMEOUT_SECONDS: int = 5
     STATIONS_RETRY: int = 3
     PAYMENTS_RETRY: int = 3
-    CONFIG_SERVICE_URL: str = "http://fake-config"
     DB_URL_SHARD_0: Optional[str] = "postgresql+asyncpg://rental-cmd-db-master/rental_cmd_shard_0"
     DB_URL_SHARD_1: Optional[str] = "postgresql+asyncpg://rental-cmd-db-master/rental_cmd_shard_1"
 

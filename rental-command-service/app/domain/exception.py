@@ -73,9 +73,9 @@ class StationIdMissedException(DomainException):
 class RentalNotFoundException(DomainException):
     """Rental not found"""
 
-    def __init__(self, user_id: str, rental_id: str, station_id: str) -> None:
+    def __init__(self, user_id: str, rental_id: str) -> None:
         super().__init__(
-            message=f"Rental {rental_id} not found. user_id = {user_id}, return_station_id = {station_id}",
+            message=f"Rental {rental_id} not found. user_id = {user_id}",
             code="RENTAL_NOT_FOUND",
         )
 

@@ -111,7 +111,7 @@ class RentalService:
                 rental = await self.repo.get(rental_id)
                 if not rental:
                     raise RentalNotFoundException(
-                        str(user_id), str(rental_id), return_station_id
+                        str(user_id), str(rental_id)
                     )
 
                 if str(rental.user_id) != str(user_id):
