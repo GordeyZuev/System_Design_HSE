@@ -11,7 +11,7 @@
 pip install -r requirements.txt
 
 # Запуск сервиса
-uvicorn app.main:app --host 0.0.0.0 --port 8081
+uvicorn app.main:app --host 0.0.0.0 --port 8003
 ```
 
 ## API Эндпоинты
@@ -59,19 +59,19 @@ uvicorn app.main:app --host 0.0.0.0 --port 8081
 
 **Логин:**
 ```bash
-curl -X POST http://localhost:8081/auth/login \
+curl -X POST http://localhost:8003/auth/login \
   -H "Content-Type: application/json" \
   -d '{"email": "test@example.com", "password": "testpassword123"}'
 ```
 
 **Получение информации о пользователе:**
 ```bash
-curl http://localhost:8081/api/v1/users/{user_id}
+curl http://localhost:8003/api/v1/users/{user_id}
 ```
 
 **Валидация JWT:**
 ```bash
-curl -X POST http://localhost:8081/api/v1/jwt/validate \
+curl -X POST http://localhost:8003/api/v1/jwt/validate \
   -H "Content-Type: application/json" \
   -d '{"token": "YOUR_TOKEN"}'
 ```
@@ -94,7 +94,7 @@ user-service/
 Переменные окружения:
 
 - `JWT_SECRET` - Секретный ключ для JWT (обязательно в production)
-- `APP_PORT` - Порт приложения (по умолчанию 8081)
+- `APP_PORT` - Порт приложения (по умолчанию 8003)
 - `LOG_LEVEL` - Уровень логирования (по умолчанию INFO)
 
 ## Хранилище
