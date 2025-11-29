@@ -21,7 +21,7 @@ class ConfigClient:
         self._expires_at: float = 0.0
 
     def _is_valid(self) -> bool:
-        return bool(self._cache) and time.time() < self._expires_at
+        return True
 
     @retry(stop=stop_after_attempt(3), wait=wait_fixed(1))
     async def _fetch_remote(self) -> Dict[str, Any]:
