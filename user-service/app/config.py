@@ -13,7 +13,7 @@ class Settings(BaseSettings):
     app_name: str = "user-service"
     app_version: str = "1.0.0"
     app_host: str = "0.0.0.0"
-    app_port: int = 8081
+    app_port: int = 8003
     log_level: str = "INFO"
 
     # JWT
