@@ -20,7 +20,6 @@ _stations_adapter: Optional[StationsAdapter] = None
 _rental_command_repository: Optional[RentalRepository] = None
 
 
-
 async def get_offer_client() -> OfferClient:
     global _offer_client
     if _offer_client is None:

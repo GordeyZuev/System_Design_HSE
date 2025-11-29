@@ -11,7 +11,10 @@ class Settings(BaseSettings):
     STATIONS_SERVICE_URL: str = "http://localhost:8005"
     PAYMENTS_SERVICE_URL: str = "http://localhost:8006"
     SERVICE_PORT: int = Field(8001, env="SERVER_PORT")
+<<<<<<< HEAD
 
+=======
+>>>>>>> 78b957e (upd)
     OUTBOX_POLL_INTERVAL_SECONDS: int = 5
     HTTP_TIMEOUT_SECONDS: int = 5
     STATIONS_RETRY: int = 3
