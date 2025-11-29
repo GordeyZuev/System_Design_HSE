@@ -1,7 +1,8 @@
 import hashlib
 from typing import AsyncGenerator, Dict, Optional
 from uuid import UUID
-from fastapi import Depends, Header, HTTPException
+
+from fastapi import Depends, Header
 from sqlalchemy.ext.asyncio import (AsyncSession, async_sessionmaker,
                                     create_async_engine)
 from sqlalchemy.orm import declarative_base
