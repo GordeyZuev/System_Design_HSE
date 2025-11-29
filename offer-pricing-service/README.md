@@ -145,9 +145,9 @@ curl -X POST "http://localhost:8001/internal/offers/123e4567-e89b-12d3-a456-4266
 ### 3. Валидация офферов
 
 При старте аренды проверяется:
-- ✅ Срок действия (`expires_at`)
-- ✅ Статус оффера (`ACTIVE`)
-- ✅ Владелец оффера (`user_id`)
+- Срок действия (`expires_at`)
+- Статус оффера (`ACTIVE`)
+- Владелец оффера (`user_id`)
 
 ### 4. Мониторинг
 
@@ -182,11 +182,26 @@ GREEDY_PRICING_MULTIPLIER=1.5
 
 ## Хранилище данных
 
-**Текущая версия:** In-Memory БД (для разработки и тестирования)
+**Production & Development:** PostgreSQL с миграциями Alembic
 
-Данные хранятся в памяти и очищаются при перезапуске сервиса.
+**Testing:** PostgreSQL репозиторий с SQLite in-memory для быстрых тестов
 
-**Будущая версия:** PostgreSQL с миграциями Alembic (будет добавлено позже).
+### База данных PostgreSQL
+
+```bash
+# Применить миграции
+alembic upgrade head
+
+# Создать новую миграцию
+alembic revision --autogenerate -m "Description"
+
+# Откат миграции
+alembic downgrade -1
+```
+
+**Схема БД:**
+- `offers` - основная таблица офферов
+- `offer_audit` - audit log событий
 
 ## Интеграция с другими сервисами
 
@@ -237,6 +252,32 @@ offer-pricing-service/
 
 ## Разработка
 
+### Локальный запуск
+
+```bash
+# Установить зависимости
+pip install -r requirements.txt
+
+# Применить миграции (для PostgreSQL)
+alembic upgrade head
+
+# Запустить сервис
+uvicorn app.main:app --reload --port 8001
+```
+
+### Docker
+
+```bash
+# Собрать образ
+docker build -t offer-pricing-service .
+
+# Запустить контейнер
+docker run -p 8001:8001 \
+  -e DATABASE_URL=postgresql+asyncpg://postgres:postgres@host:5432/offers_db \
+  -e USE_POSTGRES=true \
+  offer-pricing-service
+```
+
 ### Форматирование кода
 
 ```bash
@@ -246,8 +287,29 @@ black app/
 ### Тестирование
 
 ```bash
- python3 -m pytest tests/
+# Запустить все тесты
+python3 -m pytest tests/
+
+# Тесты с покрытием
+python3 -m pytest tests/ --cov=app --cov-report=html
+
+# Только unit-тесты (изолированные слои)
+python3 -m pytest tests/test_repositories.py tests/test_offer_service.py -v
+
+# Интеграционные тесты API
+python3 -m pytest tests/test_api.py -v
 ```
+
+### Архитектура тестов
+
+Тесты организованы по слоям для изоляции:
+
+- **test_repositories.py** - тесты PostgreSQL репозитория с SQLite in-memory
+- **test_offer_service.py** - тесты бизнес-логики (service layer)
+- **test_api.py** - тесты API endpoints (API layer)
+
+Все слои тестируются изолированно с использованием моков и fixtures.
+Репозиторий тестируется с реальной БД (SQLite) для проверки SQL-запросов.
 
 ### Линтинг
 
@@ -259,13 +321,12 @@ flake8 app/
 
 Реализация соответствует **ADR-0001** (Команда 7):
 
-✅ Микросервисная архитектура  
-✅ Чистая архитектура (Domain, Services, Infrastructure, API)  
-✅ Greedy pricing при недоступности User Service  
-✅ LRU + TTL кэш для тарифов  
-✅ Контроль свежести офферов (expires_at, tariff_version)  
-✅ Prometheus метрики  
-✅ Stateless сервис (горизонтальное масштабирование)  
+ Микросервисная архитектура  
+Чистая архитектура (Domain, Services, Infrastructure, API)  
+Greedy pricing при недоступности User Service  
+LRU + TTL кэш для тарифов  
+Контроль свежести офферов (expires_at, tariff_version)  
+Prometheus метрики  
 
 ## Автор
 

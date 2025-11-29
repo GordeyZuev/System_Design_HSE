@@ -23,32 +23,35 @@ wheels/
 .installed.cfg
 *.egg
 
-# IDEs
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.hypothesis/
+
+# IDE
 .vscode/
 .idea/
 *.swp
 *.swo
 *~
 
+# Git
+.gitignore
+
+# Documentation
+ARCHITECTURE.md
+docs/
+
 # Environment
 .env
 .env.local
+.env.*.local
 
-# Database
-*.db
-*.sqlite
-postgres_data/
-
-# Logs
+# Development
 *.log
-
-# Testing
-.coverage
-htmlcov/
-.pytest_cache/
-.tox/
-
-# OS
 .DS_Store
-Thumbs.db
 
+# Alembic
+alembic.ini

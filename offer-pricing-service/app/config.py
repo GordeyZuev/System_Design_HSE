@@ -14,6 +14,9 @@ class Settings(BaseSettings):
     app_port: int = 8001
     log_level: str = "INFO"
 
+    # Database
+    database_url: str = "postgresql+asyncpg://postgres:postgres@localhost:5432/offers_db"
+
     # External Services
     user_service_url: str = "http://localhost:8000"
     tariff_service_url: str = "http://localhost:8002"
