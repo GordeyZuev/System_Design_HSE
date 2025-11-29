@@ -1,8 +1,15 @@
-"""Pytest configuration and fixtures."""
+"""Pytest configuration and fixtures.
+
+Поддерживает изолированное тестирование всех слоев с PostgreSQL репозиторием.
+Использует SQLite in-memory для быстрых тестов.
+"""
 import pytest
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock
 from uuid import UUID, uuid4
 from datetime import datetime, timedelta
+
+from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
+from sqlalchemy.pool import StaticPool
 
 from app.domain.models import (
     Offer,
@@ -12,9 +19,40 @@ from app.domain.models import (
     UserSegment,
     ConfigData,
 )
-from app.infrastructure.repositories_inmemory import InMemoryOfferRepository
+from app.infrastructure.database import Base
+from app.infrastructure.repositories_postgres import PostgresOfferRepository
 from app.infrastructure.clients import ConfigClient, TariffClient, UserClient
 from app.services.offer_service import OfferService
+
+
+@pytest.fixture
+async def async_session():
+    """Create async session for testing with SQLite in-memory."""
+    engine = create_async_engine(
+        "sqlite+aiosqlite:///:memory:",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+        echo=False,
+    )
+
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+
+    async_session_factory = async_sessionmaker(
+        engine, class_=AsyncSession, expire_on_commit=False
+    )
+
+    async with async_session_factory() as session:
+        yield session
+        await session.rollback()
+
+    await engine.dispose()
+
+
+@pytest.fixture
+def repository(async_session: AsyncSession) -> PostgresOfferRepository:
+    """PostgreSQL repository fixture (with SQLite backend for tests)."""
+    return PostgresOfferRepository(async_session)
 
 
 @pytest.fixture
@@ -85,14 +123,6 @@ def mock_config_data() -> ConfigData:
 
 
 @pytest.fixture
-def in_memory_repository() -> InMemoryOfferRepository:
-    """In-memory offer repository."""
-    repo = InMemoryOfferRepository()
-    yield repo
-    repo.clear()
-
-
-@pytest.fixture
 def mock_tariff_client(mock_tariff_info: TariffInfo, mock_greedy_tariff_info: TariffInfo) -> AsyncMock:
     """Mock tariff client."""
     client = AsyncMock(spec=TariffClient)
@@ -120,14 +150,14 @@ def mock_config_client(mock_config_data: ConfigData) -> AsyncMock:
 
 @pytest.fixture
 def offer_service(
-    in_memory_repository: InMemoryOfferRepository,
+    repository: PostgresOfferRepository,
     mock_tariff_client: AsyncMock,
     mock_user_client: AsyncMock,
     mock_config_client: AsyncMock,
 ) -> OfferService:
     """Offer service with mocked dependencies."""
     return OfferService(
-        offer_repository=in_memory_repository,
+        offer_repository=repository,
         tariff_client=mock_tariff_client,
         user_client=mock_user_client,
         config_client=mock_config_client,
@@ -154,4 +184,3 @@ def sample_offer(mock_user_id: UUID, mock_station_id: str) -> Offer:
         status=OfferStatus.ACTIVE,
         tariff_version="v1",
     )
-

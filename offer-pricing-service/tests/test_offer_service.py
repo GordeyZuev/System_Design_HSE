@@ -4,6 +4,8 @@ from unittest.mock import AsyncMock
 from uuid import UUID
 from datetime import datetime, timedelta
 
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.domain.models import (
     CreateOfferRequest,
     Offer,
@@ -17,7 +19,7 @@ from app.domain.exceptions import (
     UserServiceUnavailableException,
 )
 from app.services.offer_service import OfferService
-from app.infrastructure.repositories_inmemory import InMemoryOfferRepository
+from app.infrastructure.repositories_postgres import PostgresOfferRepository
 
 
 @pytest.mark.asyncio
@@ -102,12 +104,14 @@ async def test_create_offer_greedy_pricing_fallback(
 @pytest.mark.asyncio
 async def test_get_offer_success(
     offer_service: OfferService,
-    in_memory_repository: InMemoryOfferRepository,
+    repository: PostgresOfferRepository,
     sample_offer: Offer,
+    async_session: AsyncSession,
 ) -> None:
     """Test successful offer retrieval."""
     # Arrange
-    await in_memory_repository.create(sample_offer)
+    await repository.create(sample_offer)
+    await async_session.commit()
 
     # Act
     response = await offer_service.get_offer(sample_offer.offer_id)
@@ -133,13 +137,15 @@ async def test_get_offer_not_found(
 @pytest.mark.asyncio
 async def test_get_offer_with_wrong_user(
     offer_service: OfferService,
-    in_memory_repository: InMemoryOfferRepository,
+    repository: PostgresOfferRepository,
     sample_offer: Offer,
     mock_user_id: UUID,
+    async_session: AsyncSession,
 ) -> None:
     """Test offer retrieval with wrong user ID."""
     # Arrange
-    await in_memory_repository.create(sample_offer)
+    await repository.create(sample_offer)
+    await async_session.commit()
     wrong_user_id = UUID("00000000-0000-0000-0000-000000000001")
 
     # Act & Assert
@@ -150,34 +156,42 @@ async def test_get_offer_with_wrong_user(
 @pytest.mark.asyncio
 async def test_validate_and_use_offer_success(
     offer_service: OfferService,
-    in_memory_repository: InMemoryOfferRepository,
+    repository: PostgresOfferRepository,
     sample_offer: Offer,
+    async_session: AsyncSession,
 ) -> None:
     """Test successful offer validation and usage."""
     # Arrange
-    await in_memory_repository.create(sample_offer)
+    await repository.create(sample_offer)
+    await async_session.commit()
 
     # Act
     result = await offer_service.validate_and_use_offer(
         sample_offer.offer_id,
         sample_offer.user_id,
     )
+    await async_session.commit()
 
     # Assert
     assert result.offer_id == sample_offer.offer_id
-    assert result.status == OfferStatus.USED
+    
+    # Verify status was updated
+    updated_offer = await repository.get_by_id(sample_offer.offer_id)
+    assert updated_offer.status == OfferStatus.USED
 
 
 @pytest.mark.asyncio
 async def test_validate_expired_offer(
     offer_service: OfferService,
-    in_memory_repository: InMemoryOfferRepository,
+    repository: PostgresOfferRepository,
     sample_offer: Offer,
+    async_session: AsyncSession,
 ) -> None:
     """Test validation of expired offer."""
     # Arrange
     sample_offer.expires_at = datetime.utcnow() - timedelta(minutes=1)
-    await in_memory_repository.create(sample_offer)
+    await repository.create(sample_offer)
+    await async_session.commit()
 
     # Act & Assert
     with pytest.raises(OfferExpiredException):
@@ -190,13 +204,15 @@ async def test_validate_expired_offer(
 @pytest.mark.asyncio
 async def test_validate_already_used_offer(
     offer_service: OfferService,
-    in_memory_repository: InMemoryOfferRepository,
+    repository: PostgresOfferRepository,
     sample_offer: Offer,
+    async_session: AsyncSession,
 ) -> None:
     """Test validation of already used offer."""
     # Arrange
     sample_offer.status = OfferStatus.USED
-    await in_memory_repository.create(sample_offer)
+    await repository.create(sample_offer)
+    await async_session.commit()
 
     # Act & Assert
     with pytest.raises(OfferAlreadyUsedException):
@@ -209,12 +225,14 @@ async def test_validate_already_used_offer(
 @pytest.mark.asyncio
 async def test_validate_offer_wrong_user(
     offer_service: OfferService,
-    in_memory_repository: InMemoryOfferRepository,
+    repository: PostgresOfferRepository,
     sample_offer: Offer,
+    async_session: AsyncSession,
 ) -> None:
     """Test validation with wrong user."""
     # Arrange
-    await in_memory_repository.create(sample_offer)
+    await repository.create(sample_offer)
+    await async_session.commit()
     wrong_user_id = UUID("00000000-0000-0000-0000-000000000001")
 
     # Act & Assert
