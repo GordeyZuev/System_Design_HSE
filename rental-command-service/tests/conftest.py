@@ -55,7 +55,7 @@ def mock_rental_repo() -> AsyncMock:
 @pytest.fixture
 def mock_offer_client(mock_user_id: UUID) -> AsyncMock:
     client = AsyncMock(spec=OfferClient)
-    client.get_offer.return_value = {
+    client.validate_offer.return_value = {
         "status": "ACTIVE",
         "expires_at": (datetime.now(timezone.utc) + timedelta(minutes=10)).isoformat(),
         "user_id": str(mock_user_id),

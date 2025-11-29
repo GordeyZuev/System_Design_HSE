@@ -24,7 +24,7 @@ async def test_start_rental_success(rental_service, mock_user_id, mock_offer_id)
     assert hasattr(rental, "rental_id")
     assert hasattr(rental, "started_at")
 
-    rental_service.offer_client.get_offer.assert_awaited_once_with(str(mock_offer_id))
+    rental_service.offer_client.validate_offer.assert_awaited_once_with(str(mock_offer_id), str(mock_user_id))
     rental_service.stations_adapter.reserve_or_issue.assert_awaited_once()
     rental_service.repo.create_rental.assert_awaited_once()
 
@@ -70,7 +70,7 @@ async def test_finish_rental_success(rental_service, sample_rental):
 async def test_start_rental_offer_not_active(rental_service, mock_user_id, mock_offer_id):
     rental_service.repo.get_by_user_id = AsyncMock(return_value=None)
     
-    rental_service.offer_client.get_offer = AsyncMock(return_value={
+    rental_service.offer_client.validate_offer = AsyncMock(return_value={
         "status": "INACTIVE",
         "expires_at": (datetime.now(timezone.utc) + timedelta(minutes=10)).isoformat(),
         "user_id": str(mock_user_id),

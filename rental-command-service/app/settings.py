@@ -7,7 +7,7 @@ class Settings(BaseSettings):
     STATIONS_SERVICE_URL: AnyHttpUrl
     PAYMENTS_SERVICE_URL: AnyHttpUrl
     OFFER_SERVICE_URL: AnyHttpUrl
-    SERVICE_PORT: int = Field(8001, env="SERVER_PORT")
+    SERVICE_PORT: int = Field(8003, env="SERVER_PORT")
     OUTBOX_POLL_INTERVAL_SECONDS: int = 5
     HTTP_TIMEOUT_SECONDS: int = 5
     STATIONS_RETRY: int = 3
