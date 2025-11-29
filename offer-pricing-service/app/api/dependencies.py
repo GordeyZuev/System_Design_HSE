@@ -1,15 +1,18 @@
-"""API dependencies with in-memory storage."""
-from typing import Optional
+"""API dependencies with dependency injection."""
+from typing import AsyncGenerator, Optional
+
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.infrastructure.clients import ConfigClient, TariffClient, UserClient
-from app.infrastructure.repositories_inmemory import InMemoryOfferRepository, OfferRepository
+from app.infrastructure.database import get_async_session
+from app.infrastructure.repositories import OfferRepository
+from app.infrastructure.repositories_postgres import PostgresOfferRepository
 from app.services.offer_service import OfferService
 
-# Singleton instances
+# Singleton instances for clients
 _tariff_client: Optional[TariffClient] = None
 _user_client: Optional[UserClient] = None
 _config_client: Optional[ConfigClient] = None
-_offer_repository: Optional[InMemoryOfferRepository] = None
 
 
 def get_tariff_client() -> TariffClient:
@@ -36,20 +39,23 @@ def get_config_client() -> ConfigClient:
     return _config_client
 
 
-def get_offer_repository() -> OfferRepository:
-    """Get in-memory OfferRepository singleton."""
-    global _offer_repository
-    if _offer_repository is None:
-        _offer_repository = InMemoryOfferRepository()
-    return _offer_repository
+async def get_offer_repository(
+    session: AsyncSession = None,
+) -> AsyncGenerator[OfferRepository, None]:
+    """Get PostgreSQL OfferRepository with dependency injection."""
+    if session is None:
+        async for db_session in get_async_session():
+            yield PostgresOfferRepository(db_session)
+    else:
+        yield PostgresOfferRepository(session)
 
 
-def get_offer_service() -> OfferService:
+async def get_offer_service() -> AsyncGenerator[OfferService, None]:
     """Get OfferService with dependencies."""
-    return OfferService(
-        offer_repository=get_offer_repository(),
-        tariff_client=get_tariff_client(),
-        user_client=get_user_client(),
-        config_client=get_config_client(),
-    )
-
+    async for repo in get_offer_repository():
+        yield OfferService(
+            offer_repository=repo,
+            tariff_client=get_tariff_client(),
+            user_client=get_user_client(),
+            config_client=get_config_client(),
+        )

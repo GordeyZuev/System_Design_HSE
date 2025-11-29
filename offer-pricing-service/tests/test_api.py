@@ -65,7 +65,7 @@ def test_root_endpoint(client: TestClient) -> None:
     data = response.json()
     assert data["service"] == "offer-pricing-service"
     assert data["status"] == "running"
-    assert data["storage"] == "in-memory"
+    assert data["storage"] == "PostgreSQL"
 
 
 def test_health_endpoint(client: TestClient) -> None:

@@ -1,8 +1,10 @@
-from datetime import datetime, timezone
 import math
+from datetime import datetime, timezone
+
 
 def now():
     return datetime.now(timezone.utc)
+
 
 def minutes_between(a: datetime, b: datetime) -> int:
     diff = b - a

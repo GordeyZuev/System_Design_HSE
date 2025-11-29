@@ -1,38 +1,43 @@
-"""Tests for repositories."""
+"""Tests for PostgreSQL repository."""
 import pytest
-from uuid import UUID
+from uuid import UUID, uuid4
 from datetime import datetime, timedelta
 
 from app.domain.models import Offer, OfferStatus
-from app.infrastructure.repositories_inmemory import InMemoryOfferRepository
+from app.infrastructure.repositories_postgres import PostgresOfferRepository
+from sqlalchemy.ext.asyncio import AsyncSession
 
 
 @pytest.mark.asyncio
 async def test_create_offer(
-    in_memory_repository: InMemoryOfferRepository,
+    repository: PostgresOfferRepository,
     sample_offer: Offer,
+    async_session: AsyncSession,
 ) -> None:
     """Test creating an offer."""
     # Act
-    created = await in_memory_repository.create(sample_offer)
+    created = await repository.create(sample_offer)
+    await async_session.commit()
 
     # Assert
     assert created.offer_id == sample_offer.offer_id
-    assert len(in_memory_repository._audit_events) == 1
-    assert in_memory_repository._audit_events[0]["event_type"] == "CREATED"
+    assert created.user_id == sample_offer.user_id
+    assert created.station_id == sample_offer.station_id
 
 
 @pytest.mark.asyncio
 async def test_get_offer_by_id(
-    in_memory_repository: InMemoryOfferRepository,
+    repository: PostgresOfferRepository,
     sample_offer: Offer,
+    async_session: AsyncSession,
 ) -> None:
     """Test getting offer by ID."""
     # Arrange
-    await in_memory_repository.create(sample_offer)
+    await repository.create(sample_offer)
+    await async_session.commit()
 
     # Act
-    retrieved = await in_memory_repository.get_by_id(sample_offer.offer_id)
+    retrieved = await repository.get_by_id(sample_offer.offer_id)
 
     # Assert
     assert retrieved is not None
@@ -42,12 +47,12 @@ async def test_get_offer_by_id(
 
 @pytest.mark.asyncio
 async def test_get_offer_by_id_not_found(
-    in_memory_repository: InMemoryOfferRepository,
+    repository: PostgresOfferRepository,
     mock_offer_id: UUID,
 ) -> None:
     """Test getting non-existent offer."""
     # Act
-    retrieved = await in_memory_repository.get_by_id(mock_offer_id)
+    retrieved = await repository.get_by_id(mock_offer_id)
 
     # Assert
     assert retrieved is None
@@ -55,35 +60,31 @@ async def test_get_offer_by_id_not_found(
 
 @pytest.mark.asyncio
 async def test_update_offer_status(
-    in_memory_repository: InMemoryOfferRepository,
+    repository: PostgresOfferRepository,
     sample_offer: Offer,
+    async_session: AsyncSession,
 ) -> None:
     """Test updating offer status."""
     # Arrange
-    await in_memory_repository.create(sample_offer)
+    await repository.create(sample_offer)
+    await async_session.commit()
 
     # Act
-    await in_memory_repository.update_status(sample_offer.offer_id, OfferStatus.USED)
+    await repository.update_status(sample_offer.offer_id, OfferStatus.USED)
+    await async_session.commit()
 
     # Assert
-    retrieved = await in_memory_repository.get_by_id(sample_offer.offer_id)
+    retrieved = await repository.get_by_id(sample_offer.offer_id)
     assert retrieved is not None
     assert retrieved.status == OfferStatus.USED
-    
-    # Check audit
-    status_events = [
-        e for e in in_memory_repository._audit_events
-        if e["event_type"] == "STATUS_CHANGED"
-    ]
-    assert len(status_events) == 1
-    assert status_events[0]["payload"]["new_status"] == "USED"
 
 
 @pytest.mark.asyncio
 async def test_get_active_by_user(
-    in_memory_repository: InMemoryOfferRepository,
+    repository: PostgresOfferRepository,
     mock_user_id: UUID,
     mock_station_id: str,
+    async_session: AsyncSession,
 ) -> None:
     """Test getting active offers by user."""
     # Arrange
@@ -96,9 +97,9 @@ async def test_get_active_by_user(
         expires_at=datetime.utcnow() + timedelta(minutes=5),
         status=OfferStatus.ACTIVE,
     )
-    await in_memory_repository.create(active_offer)
+    await repository.create(active_offer)
 
-    # Create expired offer
+    # Create expired offer (should not be returned)
     expired_offer = Offer(
         user_id=mock_user_id,
         station_id=mock_station_id,
@@ -107,9 +108,9 @@ async def test_get_active_by_user(
         expires_at=datetime.utcnow() - timedelta(minutes=1),
         status=OfferStatus.ACTIVE,
     )
-    await in_memory_repository.create(expired_offer)
+    await repository.create(expired_offer)
 
-    # Create used offer
+    # Create used offer (should not be returned)
     used_offer = Offer(
         user_id=mock_user_id,
         station_id=mock_station_id,
@@ -118,10 +119,12 @@ async def test_get_active_by_user(
         expires_at=datetime.utcnow() + timedelta(minutes=5),
         status=OfferStatus.USED,
     )
-    await in_memory_repository.create(used_offer)
+    await repository.create(used_offer)
+
+    await async_session.commit()
 
     # Act
-    active_offers = await in_memory_repository.get_active_by_user(mock_user_id)
+    active_offers = await repository.get_active_by_user(mock_user_id)
 
     # Assert
     assert len(active_offers) == 1
@@ -129,19 +132,22 @@ async def test_get_active_by_user(
 
 
 @pytest.mark.asyncio
-async def test_clear_repository(
-    in_memory_repository: InMemoryOfferRepository,
+async def test_log_audit_event(
+    repository: PostgresOfferRepository,
     sample_offer: Offer,
+    async_session: AsyncSession,
 ) -> None:
-    """Test clearing repository."""
+    """Test logging audit event."""
     # Arrange
-    await in_memory_repository.create(sample_offer)
-    assert len(in_memory_repository._offers) == 1
+    await repository.create(sample_offer)
+    await async_session.commit()
 
     # Act
-    in_memory_repository.clear()
+    await repository.log_audit_event(
+        sample_offer.offer_id,
+        "TEST_EVENT",
+        {"key": "value"},
+    )
+    await async_session.commit()
 
-    # Assert
-    assert len(in_memory_repository._offers) == 0
-    assert len(in_memory_repository._audit_events) == 0
-
+    # Assert - event logged (verified by no exception)

@@ -53,14 +53,26 @@ app.add_middleware(
 @app.on_event("startup")
 async def startup_event() -> None:
     """Startup event handler."""
-    logger.info(f"🚀 Starting {settings.app_name} v{settings.app_version}")
-    logger.info("📝 Using in-memory database")
+    logger.info(f"Starting {settings.app_name} v{settings.app_version}")
+    
+    from app.infrastructure.database import init_db
+    logger.info("Initializing PostgreSQL database")
+    try:
+        await init_db()
+        logger.info("Database initialized successfully")
+    except Exception as e:
+        logger.error(f"Failed to initialize database: {e}")
+        raise
 
 
 @app.on_event("shutdown")
 async def shutdown_event() -> None:
     """Shutdown event handler."""
     logger.info("Shutting down")
+    
+    from app.infrastructure.database import close_db
+    logger.info("Closing database connections")
+    await close_db()
 
 
 # Import and include routers
@@ -78,6 +90,6 @@ async def root() -> dict:
         "service": settings.app_name,
         "version": settings.app_version,
         "status": "running",
-        "storage": "in-memory",
+        "storage": "PostgreSQL",
     }
 

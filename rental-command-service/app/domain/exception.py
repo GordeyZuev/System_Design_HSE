@@ -19,6 +19,7 @@ class OfferNotActiveException(DomainException):
             code="OFFER_NOT_ACTIVE",
         )
 
+
 class ExpireAtNotFoundException(DomainException):
     """Offer not found expire_at exception."""
 
@@ -27,6 +28,7 @@ class ExpireAtNotFoundException(DomainException):
             message=f"No expire_at field for {offer_id} offer",
             code="EXPIRE_AT_NOT_FOUND",
         )
+
 
 class UserAlreadyRentException(DomainException):
     """User already has active rent exception."""
@@ -37,6 +39,7 @@ class UserAlreadyRentException(DomainException):
             code="USER_ALREADY_ACTIVE",
         )
 
+
 class OfferNotBelongUserException(DomainException):
     """Offer does not belong to this user"""
 
@@ -45,6 +48,7 @@ class OfferNotBelongUserException(DomainException):
             message=f"Offer {offer_id} does not belong to this user {user_id}",
             code="OFFER_USER_MISMATCH",
         )
+
 
 class OfferExpiredException(DomainException):
     """Offer expired"""
@@ -55,6 +59,7 @@ class OfferExpiredException(DomainException):
             code="OFFER_EXPIRED",
         )
 
+
 class StationIdMissedException(DomainException):
     """Missed station_id field"""
 
@@ -63,6 +68,7 @@ class StationIdMissedException(DomainException):
             message=f"Offer {offer_id} doesn't contain station_id field ",
             code="STATION_ID_FIELD",
         )
+
 
 class RentalNotFoundException(DomainException):
     """Rental not found"""
@@ -73,6 +79,7 @@ class RentalNotFoundException(DomainException):
             code="RENTAL_NOT_FOUND",
         )
 
+
 class RentalAlreadyFinishedException(DomainException):
     """Rental already finished"""
 
@@ -81,6 +88,7 @@ class RentalAlreadyFinishedException(DomainException):
             message=f"Rental {rental_id} already finished. user_id = {user_id}",
             code="RENTAL_ALREADY_FINISHED",
         )
+
 
 class UserIdsMismatchException(DomainException):
     """User_id from rentals and given user_id mismatched"""
