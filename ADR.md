@@ -265,39 +265,6 @@
 
 ---
 
-graph TB
-    Client[Клиент]
-    
-    subgraph "Реализованные сервисы"
-        Gateway[API Gateway]
-        User[User Service]
-        Offer[Offer Service]
-        Rental[Rental Service]
-    end
-    
-    subgraph "Внешние сервисы моки"
-        Tariff[Tariff Service]
-        Config[Config Service]
-        Stations[Stations Service]
-        Payments[Payments Service]
-    end
-    
-    Client --> Gateway
-    Gateway --> User & Offer & Rental
-    
-    Offer --> Tariff
-    Offer --> Config
-    Offer -.-> User
-    
-    Rental --> Offer
-    Rental --> Stations
-    Rental --> Payments
-    
-    style Gateway fill:#90caf9
-    style User fill:#ef9a9a
-    style Offer fill:#a5d6a7
-    style Rental fill:#a5d6a7
-    style Tariff fill:#eeeeee
-    style Config fill:#eeeeee
-    style Stations fill:#eeeeee
-    style Payments fill:#eeeeee
+
+## Архитектура
+![Архитектура системы](docs/architecture.png)
