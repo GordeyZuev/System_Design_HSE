@@ -34,7 +34,7 @@ class RentalService:
     async def start_rental(self, user_id: UUID, offer_id: UUID):
         try:
             async with self.session.begin():
-                offer = await self.offer_client.get_offer(str(offer_id))
+                offer = await self.offer_client.validate_offer(str(offer_id), str(user_id))
                 
                 if offer.get("status") != "ACTIVE":
                     print("NOT ACTIVE")
