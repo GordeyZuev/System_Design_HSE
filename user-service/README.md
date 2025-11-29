@@ -35,30 +35,27 @@ uvicorn app.main:app --host 0.0.0.0 --port 8081
   - Request: `{token}`
   - Response: `{valid, user_id?, segment?, roles?}`
 
-### Dev (для разработки)
-
-- `POST /dev/create-test-user` - Создание тестового пользователя
-  - Response: `{message, user_id, email, password, segment}`
+- `GET /api/v1/users` - Получение списка всех пользователей
+  - Response: `[{user_id, email, segment, status, phone}, ...]`
 
 ### Мониторинг
 
 - `GET /health` - Health check
 - `GET /metrics` - Prometheus метрики
 
-## Тестирование
+## Тестовые пользователи
 
-### Создание тестового пользователя
+При старте сервиса автоматически создаются 5 тестовых пользователей:
 
-```bash
-curl -X POST http://localhost:8081/dev/create-test-user
-```
+| Email | Password | Segment |
+|-------|----------|---------|
+| test1@example.com | testpassword123 | STANDARD |
+| test2@example.com | testpassword123 | PREMIUM |
+| test3@example.com | testpassword123 | VIP |
+| test4@example.com | testpassword123 | STANDARD |
+| test5@example.com | testpassword123 | PREMIUM |
 
-Создаст пользователя:
-- Email: `test@example.com`
-- Password: `testpassword123`
-- Segment: `STANDARD`
-
-### Примеры запросов
+## Примеры запросов
 
 **Логин:**
 ```bash

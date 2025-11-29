@@ -1,9 +1,7 @@
 """API routes."""
 import logging
-from datetime import datetime, timezone
 from uuid import UUID
 
-import bcrypt
 from fastapi import APIRouter, Depends, HTTPException, status
 from prometheus_client import Counter, Histogram
 
@@ -23,11 +21,6 @@ from app.domain.models import (
     LoginResponse,
     RefreshRequest,
     RefreshResponse,
-    User,
-    UserProfile,
-    UserSegment,
-    UserSegmentModel,
-    UserStatus,
 )
 from app.infrastructure.jwt_handler import JWTHandler
 from app.services.auth_service import AuthService
@@ -36,16 +29,13 @@ from app.services.user_service import UserService
 from .dependencies import (
     get_auth_service,
     get_jwt_handler,
-    get_user_profile_repository,
-    get_user_repository,
-    get_user_segment_repository,
     get_user_service,
 )
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(tags=["auth", "users"])
-dev_router = APIRouter(tags=["dev"], prefix="/dev")
+auth_router = APIRouter(tags=["auth"])
+users_router = APIRouter(tags=["users"])
 
 # Prometheus metrics
 login_counter = Counter(
@@ -65,7 +55,7 @@ login_duration = Histogram(
 )
 
 
-@router.post(
+@auth_router.post(
     "/auth/login",
     response_model=LoginResponse,
     status_code=status.HTTP_200_OK,
@@ -103,7 +93,7 @@ async def login(
         )
 
 
-@router.post(
+@auth_router.post(
     "/auth/refresh", response_model=RefreshResponse, status_code=status.HTTP_200_OK
 )
 async def refresh(
@@ -143,7 +133,37 @@ async def refresh(
         )
 
 
-@router.get("/api/v1/users/{user_id}")
+@users_router.get("/api/v1/users")
+async def get_all_users(
+    service: UserService = Depends(get_user_service),
+) -> dict:
+    """Get all users."""
+    try:
+        users_info = await service.get_all_users()
+        user_get_counter.labels(status="success").inc()
+        return {
+            "users": [
+                {
+                    "user_id": str(user_info.user_id),
+                    "email": user_info.email,
+                    "segment": user_info.segment.value,
+                    "status": user_info.status,
+                    "phone": user_info.phone,
+                }
+                for user_info in users_info
+            ],
+            "total": len(users_info),
+        }
+    except Exception as e:
+        logger.exception(f"Unexpected error getting users: {e}")
+        user_get_counter.labels(status="error").inc()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail={"code": "INTERNAL_ERROR", "message": "Internal server error"},
+        )
+
+
+@users_router.get("/api/v1/users/{user_id}")
 async def get_user(
     user_id: UUID,
     service: UserService = Depends(get_user_service),
@@ -175,7 +195,7 @@ async def get_user(
         )
 
 
-@router.post("/api/v1/jwt/validate", response_model=JWTValidateResponse)
+@auth_router.post("/api/v1/jwt/validate", response_model=JWTValidateResponse)
 async def validate_jwt(
     request: JWTValidateRequest,
     jwt_handler: JWTHandler = Depends(get_jwt_handler),
@@ -198,65 +218,4 @@ async def validate_jwt(
         logger.exception(f"Unexpected error validating JWT: {e}")
         jwt_validate_counter.labels(status="error").inc()
         return JWTValidateResponse(valid=False)
-
-
-@dev_router.post("/create-test-user")
-async def create_test_user(
-    user_repo=Depends(get_user_repository),
-    profile_repo=Depends(get_user_profile_repository),
-    segment_repo=Depends(get_user_segment_repository),
-) -> dict:
-    """Create test user for development/testing."""
-    try:
-        existing_user = await user_repo.get_by_email("test@example.com")
-        if existing_user:
-            return {
-                "message": "Test user already exists",
-                "user_id": str(existing_user.user_id),
-                "email": existing_user.email,
-            }
-
-        password = "testpassword123"
-        password_hash = bcrypt.hashpw(
-            password.encode("utf-8"), bcrypt.gensalt(rounds=12)
-        ).decode("utf-8")
-
-        user = User(
-            email="test@example.com",
-            phone="+1234567890",
-            password_hash=password_hash,
-            status=UserStatus.ACTIVE,
-            created_at=datetime.now(timezone.utc),
-        )
-        created_user = await user_repo.create(user)
-
-        profile = UserProfile(
-            user_id=created_user.user_id,
-            name="Test User",
-            extra_metadata_json={},
-        )
-        await profile_repo.create(profile)
-
-        segment = UserSegmentModel(
-            user_id=created_user.user_id,
-            segment=UserSegment.STANDARD,
-            updated_at=datetime.now(timezone.utc),
-        )
-        await segment_repo.create(segment)
-
-        logger.info(f"Test user created: {created_user.user_id}")
-
-        return {
-            "message": "Test user created successfully",
-            "user_id": str(created_user.user_id),
-            "email": "test@example.com",
-            "password": "testpassword123",
-            "segment": "STANDARD",
-        }
-    except Exception as e:
-        logger.exception(f"Failed to create test user: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail={"code": "INTERNAL_ERROR", "message": str(e)},
-        )
 

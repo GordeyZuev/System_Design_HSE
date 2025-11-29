@@ -36,6 +36,11 @@ class UserRepository(ABC):
         """Update user status."""
         pass
 
+    @abstractmethod
+    async def get_all(self) -> list[User]:
+        """Get all users."""
+        pass
+
 
 class UserProfileRepository(ABC):
     """Abstract user profile repository interface."""
