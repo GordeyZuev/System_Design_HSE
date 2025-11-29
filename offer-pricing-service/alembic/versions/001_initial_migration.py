@@ -20,7 +20,7 @@ depends_on: Union[str, Sequence[str], None] = None
 
 def upgrade() -> None:
     # Create enum type for offer status
-    op.execute("CREATE TYPE offer_status AS ENUM ('ACTIVE', 'USED', 'EXPIRED', 'CANCELLED')")
+    # op.execute("CREATE TYPE offer_status AS ENUM ('ACTIVE', 'USED', 'EXPIRED', 'CANCELLED')")
     
     # Create offers table
     op.create_table(

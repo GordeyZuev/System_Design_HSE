@@ -5,7 +5,7 @@ RUN apk add --no-cache curl
 RUN rm -rf /etc/nginx/conf.d/*
 
 COPY nginx.conf /etc/nginx/nginx.conf
-COPY conf.d/ /etc/nginx/conf.d/
+COPY conf.d /etc/nginx/conf.d/
 
 RUN mkdir -p /var/log/nginx && \
     chown -R nginx:nginx /var/log/nginx
