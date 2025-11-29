@@ -6,44 +6,48 @@
 
 Ключевые сервисы:
 
-- **API Gateway** — единая точка входа, маршрутизирует запросы на нужный сервис.
-- **Offer & Pricing Service** — отвечает за офферы и прайсинг (использует tariffs, config и обращается к отдельному User Service для сегментов/статусов), самодостаточный по чтению.
-- **Rental Command Service** — операции старта/завершения аренды (использует оффер и данные станций/платежей).
-- **Rental Query Service** — быстрые чтения по арендам и текущей стоимости (CQRS, postgres).
-- **Stations Adapter** — критичный сервис взаимодействия со станциями.
-- **Payments Adapter** — критичный сервис взаимодействия с платежами.
-- **Tariffs, Config Clients** — обёртки над внешними сервисами с кэшем и falcоlback-политиками.
-- **User Service (Auth & Profile)** — отдельный сервис рядом с API Gateway: аутентификация, авторизация, профили, сегменты пользователей. Другие сервисы обращаются к нему как к единому источнику правды по пользователям.
+- **API Gateway (nginx)** — единая точка входа, маршрутизирует запросы на нужный сервис.
+- **Offer & Pricing Service** — отвечает за офферы и прайсинг (использует внешние tariffs, config и обращается к User Service для сегментов/статусов), самодостаточный по чтению.
+- **Rental Command Service** — операции старта/завершения аренды (использует оффер и взаимодействует с внешними stations/payments). Также содержит эндпоинты для чтения арендов и текущей стоимости.
+- **User Service (Auth & Profile)** — аутентификация, авторизация, профили, сегменты пользователей. Другие сервисы обращаются к нему как к единому источнику правды по пользователям.
 
 Горячие пути разделены:
 - создание оффера,
 - старт/финиш аренды,
 - чтение состояния аренды/стоимости — масштабируются независимо.
 
+Внешние зависимости (мокируются или предполагаются):
+- **Stations Service** — управление станциями, резервирование/выдача/возврат пауэрбанков.
+- **Payments Service** — списание/возврат средств, работа через Outbox-паттерн.
+- **Tariff Service** — предоставление тарифов, используется через клиент с LRU-кэшем.
+- **Config Service** — централизованная конфигурация, используется через клиент с TTL-кэшем.
 
 ### Компоненты
 
-#### Rental Service (Core)
-- Управляет офферами и арендой.
-- Контролирует свежесть оффера (expires_at, tariff_version).
-- Endpoint: `GET /rentals/{rental_id}` — возвращает статус и текущую стоимость.
-- Хранит состояние в PostgreSQL.
+#### API Gateway (nginx)
+- Единая точка входа для всех клиентских запросов.
+- Маршрутизация на внутренние сервисы.
+- Терминация TLS (опционально).
 
-#### Stations Adapter
-- Проверяет наличие и доступность станций.
-- Обеспечивает команду на выдачу/возврат пауэрбанка.
-- При сбое — fail fast + retry.
+#### Offer & Pricing Service
+- Создание офферов с актуальными тарифами.
+- Валидация и использование офферов при старте аренды.
+- Контроль свежести оффера (expires_at, tariff_version).
+- Хранит `offers` и `offer_audit` в PostgreSQL.
+- **Fallback greedy pricing** — если при вычислении стоимости не может получить информацию от User Service (таймаут/ошибка), использует "жадный" тариф.
 
-#### Payments Adapter
-- Отправляет команды на списание/возврат денег.
-- Идемпотентен: операции по `rental_id`.
-- Использует Outbox-паттерн для гарантированной доставки.
+#### Rental Command Service
+- Управляет жизненным циклом аренды (старт/финиш).
+- Command endpoints: `POST /internal/rentals/start`, `POST /internal/rentals/{rental_id}/finish`.
+- Query endpoints: `GET /internal/rentals/{rental_id}` — чтение аренды и текущей стоимости.
+- Хранит `rentals`, `rental_events`, `outbox_payments` в PostgreSQL.
+- Взаимодействует с внешними Stations и Payments через HTTP API.
 
-#### Tariffs / Config Clients и User Servicexwxw
-- **ConfigClient** — кэш с TTL=60s, auto-refresh.
-- **TariffClient** — LRUCache с TTL (дефолт 10 минут, конфигурируемый), при протухании ошибка.
-- **User Service (Auth & Profile)** — отдельный сервис, через который проходит аутентификация и авторизация (JWT). Offer & Pricing Service и другие бэкенды используют его API для получения сегмента/статуса пользователя.
-- **Fallback greedy pricing** — если при вычислении стоимости Offer & Pricing Service не может получить информацию от User Service (таймаут/ошибка), он использует "жадный" тариф. Это локальная деградация без проброса проблемы в Gateway.
+#### User Service (Auth & Profile)
+- Аутентификация и авторизация через JWT.
+- Управление профилями пользователей.
+- Управление сегментами пользователей для персонализации тарифов.
+- **Хранилище:** In-memory (для прототипа/демонстрации).
 
 ### Данные и хранилище
 
@@ -84,7 +88,7 @@
 - 1000 RPS на `POST /rentals/start`.
 - 100x `GET /rentals/{id}` на одну аренду.
 
-#### Chaos
+#### Выпадение сервисов:
 - Отключение users → greedy pricing.
 - Отключение tariffs → ошибка.
 
@@ -125,14 +129,16 @@
 - **Состояние:** stateless.
 
 ### User Service (Auth & Profile)
-- **Тип БД:** PostgreSQL.
-- **Таблицы:**
+- **Тип БД:** In-memory (для прототипа).
+- **Структуры данных:**
   - `users(user_id, email, phone, password_hash, status, created_at)`
-  - `user_profiles(user_id, name, extra_metadata_json)`
+  - `user_profiles(user_id, name, extra_metadata)`
   - `user_segments(user_id, segment, updated_at)`
   - `refresh_tokens(token_id, user_id, expires_at, revoked)`
-- **Репликация:**
-  - 1 primary + 1..N read-replicas для чтения профилей и сегментов.
+- **Особенности:**
+  - Простые in-memory словари для быстрого прототипирования.
+  - Данные не персистентны (теряются при перезапуске).
+  - Для production потребуется миграция на PostgreSQL.
 
 ### Offer & Pricing Service
 - **Тип БД:** PostgreSQL.
@@ -156,31 +162,14 @@
   - `rental_events(event_id, rental_id, ts, type, payload_json)`
   - `rental_cost_snapshots(rental_id, ts, cost_amount, details_json)` — агрегированные стоимости.
   - `outbox_payments(id, rental_id, operation, amount, status, payload_json, created_at)` — для интеграции с Payments.
+- **Эндпоинты:**
+  - Command: `POST /internal/rentals/start`, `POST /internal/rentals/{rental_id}/finish`
+  - Query: `GET /internal/rentals/{rental_id}` — чтение аренды и текущей стоимости
 - **Репликация:**
-  - Primary для команд, реплики читаются Rental Query Service.
+  - Primary для команд, read-реплики для запросов на чтение.
 - **Шардирование:**
-  - По `user_id`:
+  - По `user_id`.
 
-### Rental Query Service
-- **Тип БД:** read-store.
-- **Источник данных:** события из `rental_events` + состояния из `rentals`.
-- **Таблицы/модели:**
-  - `rental_view(rental_id, user_id, station_id, status, started_at, finished_at, current_cost, last_calculated_at)`
-- **Репликация:**
-  - Данные заполняются из primary/реплик Rental Command Service через поток событий.
-- **Шардирование:**
-  - Аналогичное по `user_id`.
-
-### Stations Adapter
-- **Хранилище:**
-  - Нет собственной БД.
-  - In-memory кэш метаданных станций с коротким TTL.
-
-### Payments Adapter
-- **Хранилище:**
-  - Не имеет отдельной БД.
-  - Использует таблицу `outbox_payments` в `rental-cmd` для гарантированной доставки.
-  - Куда-то шлет и мы получаем ответ
 
 ---
 
@@ -243,9 +232,9 @@
 
 ### 5. Получение информации об аренде и текущей стоимости
 1. Client → **API Gateway**: `GET /rentals/{rental_id}` + JWT.
-2. Gateway → **Rental Query Service**: `GET /internal/rentals/{rental_id}` с:
+2. Gateway → **Rental Command Service**: `GET /internal/rentals/{rental_id}` с:
    - `user_id` из токена.
-3. Rental Query Service:
+3. Rental Command Service (query endpoint):
    - Проверяет владение `rental.user_id == token.user_id`.
    - Если `status = ACTIVE`:
      - Использует `tariff_snapshot` и `started_at` для расчёта `current_cost` на момент запроса.
@@ -254,24 +243,28 @@
 4. Ответ:
    - `rental_id, status, station_id, started_at, finished_at, current_cost, tariff_details`.
 
-### 6. Работа с Config
-- Все сервисы, которым нужен конфиг, обращаются к **ConfigClient**.
-- ConfigClient хранит значение в кэше c TTL=60s.
+### 6. Интеграции с внешними сервисами
+
+#### Config Service
+- Клиенты обращаются через **ConfigClient** с кэшем TTL=60s и auto-refresh.
 - При истечении TTL запрашивает Config Service заново.
 
-### 7. Работа с Tariffs
-- Offer & Pricing Service обращается к **TariffClient**.
-- TariffClient:
+#### Tariff Service
+- **Offer & Pricing Service** обращается через **TariffClient**:
   - LRU-кэш по ключу (station_id, tariff_type, segment).
-  - TTL (по умолчанию 10 минут, конфигом).
+  - TTL (по умолчанию 10 минут, конфигурируемый).
   - При истекшем TTL выполняет запрос к Tariffs Service.
-  - Если запрос неуспешен → возвращает ошибку наверх; оффер не создаётся.
+  - Если запрос неуспешен → возвращает ошибку; оффер не создаётся.
 
-### 8. Fallback greedy pricing (User Service недоступен)
-1. Offer & Pricing вызывает User Service для сегмента.
-2. Если таймаут/ошибка:
-   - Выбирает тариф с максимальной ставкой из доступных тарифов для данного station_id.
-   - Формирует оффер на основе этого greedy тарифа.
+#### Fallback: Greedy Pricing
+- Активируется в **Offer & Pricing Service** при недоступности User Service.
+- Процесс:
+  1. Offer & Pricing пытается получить сегмент пользователя от User Service.
+  2. При таймауте/ошибке: выбирает тариф с максимальной ставкой из доступных для данной станции.
+  3. Формирует оффер на основе greedy тарифа (защита от потери выручки).
 
 ---
 
+
+## Архитектура
+![Архитектура системы](docs/design.png) 
