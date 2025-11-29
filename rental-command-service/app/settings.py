@@ -6,7 +6,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
 
-    SERVICE_PORT: int = 8001
+    SERVICE_PORT: int = 8003
     CONFIG_SERVICE_URL: AnyHttpUrl
     CONFIG_TTL_SECONDS: int = 60
     OUTBOX_POLL_INTERVAL_SECONDS: int = 5
