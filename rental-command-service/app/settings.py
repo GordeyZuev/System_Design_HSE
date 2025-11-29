@@ -1,13 +1,18 @@
 from typing import Optional
 
-from pydantic import AnyHttpUrl
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
 
     SERVICE_PORT: int = 8003
-    CONFIG_SERVICE_URL: AnyHttpUrl
+    
+    # External Services
+    CONFIG_SERVICE_URL: str = "http://localhost:8004"
+    OFFER_SERVICE_URL: str = "http://localhost:8002"
+    STATIONS_SERVICE_URL: str = "http://localhost:8005"
+    PAYMENTS_SERVICE_URL: str = "http://localhost:8006"
+    
     CONFIG_TTL_SECONDS: int = 60
     OUTBOX_POLL_INTERVAL_SECONDS: int = 5
     HTTP_TIMEOUT_SECONDS: int = 5

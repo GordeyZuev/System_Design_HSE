@@ -18,9 +18,9 @@ class Settings(BaseSettings):
     database_url: str = "postgresql+asyncpg://postgres:adminpass@offer-db-master:5432/offer_db"
 
     # External Services
-    user_service_url: str = "http://localhost:8000"
-    tariff_service_url: str = "http://localhost:8002"
-    config_service_url: str = "http://localhost:8003"
+    user_service_url: str = "http://localhost:8001"
+    tariff_service_url: str = "http://localhost:8004"
+    config_service_url: str = "http://localhost:8004"
 
     # Timeouts
     user_service_timeout: float = 2.0
