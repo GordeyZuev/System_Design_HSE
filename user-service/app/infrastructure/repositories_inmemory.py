@@ -1,5 +1,5 @@
 """In-memory repository implementations."""
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, Optional
 from uuid import UUID
 
@@ -48,6 +48,10 @@ class InMemoryUserRepository(UserRepository):
         user = self._users.get(user_id)
         if user:
             user.status = status
+
+    async def get_all(self) -> list[User]:
+        """Get all users."""
+        return list(self._users.values())
 
     def clear(self) -> None:
         """Clear all data (for testing)."""
@@ -102,7 +106,7 @@ class InMemoryUserSegmentRepository(UserSegmentRepository):
         existing = self._segments.get(user_id)
         if existing:
             existing.segment = segment
-            existing.updated_at = datetime.utcnow()
+            existing.updated_at = datetime.now(timezone.utc)
             return existing
         else:
             new_segment = UserSegmentModel(user_id=user_id, segment=segment)
