@@ -12,7 +12,7 @@ def _client():
 
 class OfferClient:
     def __init__(self):
-        self.base = "http://localhost:8002" #settings.OFFER_SERVICE_URL
+        self.base = settings.OFFER_SERVICE_URL
     
     async def validate_offer(
         self, offer_id: str, user_id: str
