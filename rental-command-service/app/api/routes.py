@@ -3,12 +3,13 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.dependencies import get_rental_command_service, get_user_id
+from app.api.dependencies import get_rental_command_service, get_user_id, get_rental_command_service_replica
 from app.infrastructure.clients.offer_client import OfferClient
 from app.infrastructure.clients.stations_adapter_client import StationsAdapter
 from app.schemas import (FinishRentalRequest, FinishRentalResponse,
                          StartRentalRequest, StartRentalResponse, RentalInfoResponse)
 from app.services.rental_service import RentalService
+
 
 router = APIRouter(prefix="/internal/rentals", tags=["rentals"])
 
@@ -61,6 +62,6 @@ async def finish_rental(
 async def get_rental(
     rental_id: UUID,
     user_id: UUID = Depends(get_user_id),
-    service: RentalService = Depends(get_rental_command_service)
+    service: RentalService = Depends(get_rental_command_service_replica)
 ):
     return await service.get_rental_info(user_id, rental_id)

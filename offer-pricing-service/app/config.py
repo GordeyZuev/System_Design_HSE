@@ -15,7 +15,7 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
 
     # Database
-    database_url: str = "postgresql+asyncpg://postgres:adminpass@offer-db-shard0-master:5432/offer_db"
+    database_url: str = "postgresql+asyncpg://postgres:adminpass@rental-db-shard0-master:5432/rental_cmd_db"
 
     # External Services
     user_service_url: str = "http://localhost:8001"
