@@ -51,7 +51,7 @@ def get_user_id(authorization: str = Header(None)) -> UUID:
         )
 
     try:
-        token = authorization.replace("Bearer", "").strip()
+        token = authorization
         return UUID(token)
     except Exception:
         raise HTTPException(

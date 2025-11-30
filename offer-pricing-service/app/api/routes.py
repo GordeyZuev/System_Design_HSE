@@ -124,6 +124,8 @@ async def validate_offer(
             "offer_id": str(offer.offer_id),
             "status": "VALIDATED",
             "tariff_snapshot": offer.tariff_snapshot,
+            "user_id": offer.user_id,
+            "station_id": offer.station_id,
         }
     except OfferNotFoundException as e:
         logger.warning(f"Offer not found for validation: {e}")

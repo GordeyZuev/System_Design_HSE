@@ -21,7 +21,8 @@ class OfferClient:
 
         async with _client() as c:
             try:
-                r = await c.post(url, params={"user_id": user_id})
+                r = await c.post(url, json={"user_id": user_id})
+                print(r.json())
                 r.raise_for_status()
                 return r.json()
             except httpx.HTTPStatusError as e:
