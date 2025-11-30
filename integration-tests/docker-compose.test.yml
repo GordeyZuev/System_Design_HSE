@@ -1,0 +1,107 @@
+version: '3.8'
+
+services:
+
+  user-service:
+    build:
+      context: ../user-service
+      dockerfile: Dockerfile
+    container_name: user-service
+    environment:
+      - SERVER_PORT=8001
+      - JWT_SECRET=${JWT_SECRET}
+    ports:
+      - "8001:8001"
+
+
+  offer-service:
+    build:
+      context: ../offer-pricing-service/
+      dockerfile: Dockerfile
+    container_name: offer-service
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://postgres:password@offer-db:5432/offer_test
+      - USER_SERVICE_URL=http://user-service:8001
+      - CONFIG_SERVICE_URL=http://config-service:8007
+      - TARIFF_SERVICE_URL=http://tariff-service:8008
+      - SERVER_PORT=8002
+    ports:
+      - "8002:8002"
+    depends_on:
+      - offer-db
+
+  offer-db:
+    image: postgres:14
+    container_name: offer-db
+    environment:
+      - POSTGRES_DB=offer_test
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=password
+    ports:
+      - "5440:5432"
+    volumes:
+      - offer_db_test_data:/var/lib/postgresql/data
+
+  rental-cmd-service:
+    build:
+      context: ../rental-command-service
+      dockerfile: Dockerfile
+    container_name: rental-cmd-service
+    environment:
+      - DB_URL=postgresql+asyncpg://postgres:password@rental-cmd-db:5432/rental_cmd_test
+      - OFFER_SERVICE_URL=http://offer-service:8002
+      - STATIONS_SERVICE_URL=http://stations-adapter:8005
+      - PAYMENTS_SERVICE_URL=http://payments-adapter:8006
+      - SERVER_PORT=8003
+    ports:
+      - "8003:8003"
+
+    
+    depends_on:
+      - rental-cmd-db
+      - offer-service
+
+  rental-cmd-db:
+    image: postgres:14
+    container_name: rental-cmd-db
+    environment:
+      - POSTGRES_DB=rental_cmd_test
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=password
+    ports:
+      - "5441:5432" 
+    volumes:
+      - rental_cmd_db_test_data:/var/lib/postgresql/data
+
+
+  stations-adapter:
+    image: python:3.12-slim
+    container_name: stations-adapter
+    command: python -m http.server 8005
+    ports:
+      - "8005:8005"
+
+  payments-adapter:
+    image: python:3.12-slim
+    container_name: payments-adapter
+    command: python -m http.server 8006
+    ports:
+      - "8006:8006"
+
+  config-service:
+    image: python:3.12-slim
+    container_name: config-service
+    command: python -m http.server 8007
+    ports:
+      - "8007:8007"
+
+  tariff-service:
+    image: python:3.12-slim
+    container_name: tariff-service
+    command: python -m http.server 8008
+    ports:
+      - "8008:8008"
+
+volumes:
+  offer_db_test_data:
+  rental_cmd_db_test_data:

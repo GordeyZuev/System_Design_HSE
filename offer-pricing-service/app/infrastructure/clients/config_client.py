@@ -32,7 +32,8 @@ class ConfigClient:
     async def get_config(self) -> ConfigData:
         """Get configuration with caching."""
         current_time = time.time()
-
+        self._cached_config = ConfigData()
+        return self._cached_config
         # Check if cache is valid
         if (
             self._cached_config is not None

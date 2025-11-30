@@ -15,13 +15,14 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
 
     # Database
-    database_url: str = "postgresql+asyncpg://postgres@localhost:5432/rental_cmd_shard_0" #"postgresql+asyncpg://postgres:adminpass@offer-db-master:5432/offer_db"
+    database_url: str = "postgresql+asyncpg://postgres:password@offer-db:5432/offer_test"
 
     # External Services
-    user_service_url: str = "http://localhost:8001"
-    tariff_service_url: str = "http://localhost:8004"
-    config_service_url: str = "http://localhost:8004"
-
+    
+    user_service_url: str = "http://user-service:8001"
+    config_service_url: str = "http://config-service:8007"
+    tariff_service_url: str = "http://tariff-service:8008"
+    
     # Timeouts
     user_service_timeout: float = 2.0
     tariff_service_timeout: float = 3.0
