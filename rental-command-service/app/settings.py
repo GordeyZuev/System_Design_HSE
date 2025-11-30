@@ -16,7 +16,7 @@ class Settings(BaseSettings):
     HTTP_TIMEOUT_SECONDS: int = 5
     STATIONS_RETRY: int = 3
     PAYMENTS_RETRY: int = 3
-    DB_URL: Optional[str] = "postgresql+asyncpg://postgres@localhost:5432/rental_cmd"
+    DB_URL: Optional[str] = "postgresql+asyncpg://postgres@localhost:5432/rental_cmd_shard_0"
     
     log_level: str = "INFO"
     app_name: str = "rental-command-service"

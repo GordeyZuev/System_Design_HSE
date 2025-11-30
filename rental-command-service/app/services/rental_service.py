@@ -39,7 +39,7 @@ class RentalService:
                     str(offer_id), str(user_id)
                 )
 
-                if offer.get("status") != "ACTIVE":
+                if offer.get("status") != "VALIDATED":
                     raise OfferNotActiveException(str(offer_id))
 
                 expires_at = offer.get("expires_at")
@@ -127,10 +127,9 @@ class RentalService:
                 started = rental.started_at
                 finished = datetime.now(timezone.utc)
                 tariff = rental.tariff_snapshot or {}
-                initial_fee = Decimal(str(tariff.get("initial_fee", 0)))
-                per_minute = Decimal(str(tariff.get("per_minute", 0)))
+                price = Decimal(str(tariff.get("price", 0)))
                 mins = minutes_between(started, finished)
-                total = initial_fee + (per_minute * Decimal(mins))
+                total = price * Decimal(mins)
 
                 st_resp = await self.stations_adapter.return_powerbank(
                     station_id=return_station_id, rental_id=str(rental_id)
@@ -172,14 +171,13 @@ class RentalService:
 
         started = rental.started_at
         finished = rental.finished_at
-        initial_fee = Decimal(str(tariff.get("initial_fee", 0)))
-        per_minute = Decimal(str(tariff.get("per_minute", 0)))
+        price = Decimal(str(rental.tariff_snapshot.get("price", 0)))
 
         if finished:
-            current_cost = initial_fee + per_minute * Decimal(minutes_between(started, finished))
+            current_cost = price * Decimal(minutes_between(started, finished))
         else:
             now = datetime.now(timezone.utc)
-            current_cost = initial_fee + per_minute * Decimal(minutes_between(started, now))
+            current_cost = price * Decimal(minutes_between(started, now))
 
         return {
             "rental_id": rental_id,

@@ -15,7 +15,7 @@ class OfferNotActiveException(DomainException):
 
     def __init__(self, offer_id: str) -> None:
         super().__init__(
-            message=f"Offer with id {offer_id} not found",
+            message=f"Offer with id {offer_id} not validated",
             code="OFFER_NOT_ACTIVE",
         )
 
@@ -25,7 +25,7 @@ class ExpireAtNotFoundException(DomainException):
 
     def __init__(self, offer_id: str) -> None:
         super().__init__(
-            message=f"No expire_at field for {offer_id} offer",
+            message=f"No expires_at field for {offer_id} offer",
             code="EXPIRE_AT_NOT_FOUND",
         )
 
