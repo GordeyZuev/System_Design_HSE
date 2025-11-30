@@ -1,0 +1,29 @@
+# Dockerfile for running tests
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    gcc \
+    libpq-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy requirements and install dependencies
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy application code
+COPY app/ ./app/
+
+# Copy tests
+COPY tests/ ./tests/
+COPY pytest.ini .
+
+# Set environment variables for tests
+ENV PYTHONPATH=/app
+ENV TESTING=true
+
+# Run tests by default
+CMD ["python", "-m", "pytest", "tests/", "-v"]
+
