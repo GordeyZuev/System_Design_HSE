@@ -56,7 +56,6 @@ class PostgresOfferRepository(OfferRepository):
         self.session.add(model)
         await self.session.flush()
         await self.session.refresh(model)
-
         # Log creation event
         await self.log_audit_event(
             offer.offer_id,
@@ -69,6 +68,7 @@ class PostgresOfferRepository(OfferRepository):
         )
 
         logger.info(f"Created offer {offer.offer_id} in database")
+        await self.session.commit()
         return self._to_domain(model)
 
     async def get_by_id(self, offer_id: UUID) -> Optional[Offer]:

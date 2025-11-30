@@ -61,7 +61,7 @@ class ConfigClient:
                 return self._cached_config
 
             # No cache available
-            raise ConfigServiceUnavailableException()
+            return ConfigData()
 
     def invalidate_cache(self) -> None:
         """Invalidate the cache."""
