@@ -101,3 +101,7 @@ class GetOfferResponse(BaseModel):
     tariff_snapshot: Dict[str, Any]
     is_valid: bool
 
+
+class ValidateOfferRequest(BaseModel):
+    user_id: UUID
+

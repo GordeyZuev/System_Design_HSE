@@ -13,7 +13,7 @@ from app.domain.exceptions import (
     OfferNotFoundException,
     TariffServiceUnavailableException,
 )
-from app.domain.models import CreateOfferRequest, CreateOfferResponse, GetOfferResponse
+from app.domain.models import CreateOfferRequest, CreateOfferResponse, GetOfferResponse, ValidateOfferRequest
 from app.services.offer_service import OfferService
 
 from .dependencies import get_offer_service
@@ -109,7 +109,7 @@ async def get_offer(
 @router.post("/{offer_id}/validate", status_code=status.HTTP_200_OK)
 async def validate_offer(
     offer_id: UUID,
-    user_id: UUID,
+    body: ValidateOfferRequest,
     service: OfferService = Depends(get_offer_service),
 ) -> dict:
     """Validate and use offer.
@@ -118,7 +118,7 @@ async def validate_offer(
     Используется Rental Command Service.
     """
     try:
-        offer = await service.validate_and_use_offer(offer_id, user_id)
+        offer = await service.validate_and_use_offer(offer_id, body.user_id)
         offer_validate_counter.labels(status="success").inc()
         return {
             "offer_id": str(offer.offer_id),
