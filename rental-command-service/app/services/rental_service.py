@@ -128,8 +128,8 @@ class RentalService:
                 started = rental.started_at
                 finished = datetime.now(timezone.utc)
                 tariff = rental.tariff_snapshot or {}
-                initial_fee = Decimal(str(tariff.get("initial_fee", 0)))
-                per_minute = Decimal(str(tariff.get("per_minute", 0)))
+                initial_fee = Decimal(str("50"))
+                per_minute = Decimal(str(tariff.get("base_rate", 0)))
                 mins = minutes_between(started, finished)
                 total = initial_fee + (per_minute * Decimal(mins))
 
