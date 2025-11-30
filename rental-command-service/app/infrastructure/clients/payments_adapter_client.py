@@ -11,14 +11,13 @@ def _client():
 
 
 class PaymentsAdapter:
-    def __init__(self, cfg_client):
-        self.cfg = cfg_client
-
+    def __init__(self):
+        self.base = settings.PAYMENTS_SERVICE_URL
+    
     async def charge(
         self, rental_id: str, amount: float, metadata: Dict[str, Any]
     ) -> Dict[str, Any]:
-        cfg = await self.cfg.get_config()
-        url = f"{cfg['payments_adapter_url'].rstrip('/')}/payments/charge"
+        url = f"{self.base}/payments/charge"
         payload = {
             "rental_id": rental_id,
             "amount": amount,
