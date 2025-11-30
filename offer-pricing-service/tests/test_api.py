@@ -166,7 +166,7 @@ def test_validate_offer_success(
     # Act
     response = client.post(
         f"/internal/offers/{mock_offer_id}/validate",
-        params={"user_id": str(mock_user_id)},
+        json={"user_id": str(mock_user_id)},
     )
 
     # Assert
