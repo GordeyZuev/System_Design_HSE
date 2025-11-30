@@ -1,7 +1,7 @@
 from typing import Optional
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
-
+import os
 
 class Settings(BaseSettings):
     '''
@@ -49,7 +49,7 @@ class Settings(BaseSettings):
     SERVICE_PORT: int = int(os.getenv("SERVER_PORT", 8003))
 
     POSTGRES_USER: str = os.getenv("POSTGRES_USER", "postgres")
-    POSTGRES_PASSWORD: str = os.getenv("POSTGRES_PASSWORD", "password")
+    POSTGRES_PASSWORD: str = os.getenv("POSTGRES_PASSWORD", "adminpass")
 
     # External Services (переопределяются через docker-compose)
     OFFER_SERVICE_URL: str = os.getenv("OFFER_SERVICE_URL", "http://offer-service:8002")
@@ -64,22 +64,22 @@ class Settings(BaseSettings):
     
     DB_URL_SHARD_0: str = (
         f"postgresql+asyncpg://{POSTGRES_USER}:{POSTGRES_PASSWORD}"
-        f"@{os.getenv('DB_MASTER_HOST', 'rental-db-shard0-master')}:5432/rental_cmd_test"
+        f"@{os.getenv('DB_MASTER_HOST', 'rental-db-shard0-master')}:5432/rental_cmd_db"
     )
 
     DB_URL_SHARD_0_REPLICA: str = (
         f"postgresql+asyncpg://{POSTGRES_USER}:{POSTGRES_PASSWORD}"
-        f"@{os.getenv('DB_REPLICA_HOST', 'rental-cmd-db-replica')}:5432/rental_cmd_test"
+        f"@{os.getenv('DB_REPLICA_HOST', 'rental-cmd-db-replica')}:5432/rental_cmd_db"
     )
 
     DB_URL_SHARD_1: str = (
         f"postgresql+asyncpg://{POSTGRES_USER}:{POSTGRES_PASSWORD}"
-        "@rental-db-shard1-master:5432/rental_cmd_test"
+        "@rental-db-shard1-master:5432/rental_cmd_db"
     )
 
     DB_URL_SHARD_1_REPLICA: str = (
         f"postgresql+asyncpg://{POSTGRES_USER}:{POSTGRES_PASSWORD}"
-        "@rental-db-replica2:5432/rental_cmd_test"
+        "@rental-db-replica2:5432/rental_cmd_db"
     )
 
     model_config = {
