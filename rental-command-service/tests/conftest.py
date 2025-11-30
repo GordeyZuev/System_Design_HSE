@@ -56,7 +56,7 @@ def mock_rental_repo() -> AsyncMock:
 def mock_offer_client(mock_user_id: UUID) -> AsyncMock:
     client = AsyncMock(spec=OfferClient)
     client.validate_offer.return_value = {
-        "status": "ACTIVE",
+        "status": "VALIDATED",
         "expires_at": (datetime.now(timezone.utc) + timedelta(minutes=10)).isoformat(),
         "user_id": str(mock_user_id),
         "tariff_snapshot": {"initial_fee": 10, "per_minute": 1},
