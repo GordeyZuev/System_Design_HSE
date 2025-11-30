@@ -36,10 +36,6 @@ MANIFEST
 .settings/
 
 # Environment
-.env
-.env.local
-.env.*.local
-
 # Database
 *.db
 *.sqlite
