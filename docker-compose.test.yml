@@ -1,0 +1,35 @@
+version: '3.8'
+
+services:
+  # ============================================
+  # Offer & Pricing Service Tests
+  # ============================================
+  offer-service-tests:
+    build:
+      context: ./offer-pricing-service
+      dockerfile: Dockerfile.test
+    container_name: offer-service-tests
+    environment:
+      - TESTING=true
+      - PYTHONPATH=/app
+    volumes:
+      - ./offer-pricing-service/tests:/app/tests
+      - ./offer-pricing-service/app:/app/app
+    command: ["python", "-m", "pytest", "tests/", "-v", "--cov=app", "--cov-report=term-missing"]
+
+  # ============================================
+  # Rental Command Service Tests
+  # ============================================
+  rental-service-tests:
+    build:
+      context: ./rental-command-service
+      dockerfile: Dockerfile.test
+    container_name: rental-service-tests
+    environment:
+      - TESTING=true
+      - PYTHONPATH=/app
+    volumes:
+      - ./rental-command-service/tests:/app/tests
+      - ./rental-command-service/app:/app/app
+    command: ["python", "-m", "pytest", "tests/", "-v"]
+
