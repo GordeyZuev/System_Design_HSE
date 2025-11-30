@@ -173,8 +173,8 @@ class RentalService:
 
         started = rental.started_at
         finished = rental.finished_at
-        initial_fee = Decimal(str(tariff.get("initial_fee", 0)))
-        per_minute = Decimal(str(tariff.get("per_minute", 0)))
+        initial_fee = Decimal(str(0))
+        per_minute = Decimal(str(0))
 
         if finished:
             current_cost = initial_fee + per_minute * Decimal(minutes_between(started, finished))

@@ -62,6 +62,6 @@ async def finish_rental(
 async def get_rental(
     rental_id: UUID,
     user_id: UUID = Depends(get_user_id),
-    service: RentalService = Depends(get_rental_command_service_replica)
+    service: RentalService = Depends(get_rental_command_service)
 ):
     return await service.get_rental_info(user_id, rental_id)
