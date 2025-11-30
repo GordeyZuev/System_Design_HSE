@@ -12,14 +12,18 @@ def _client():
 
 class OfferClient:
     def __init__(self):
-        self.base = settings.OFFER_SERVICE_URL
+        self.base = "http://localhost:8002" #settings.OFFER_SERVICE_URL
     
     async def validate_offer(
         self, offer_id: str, user_id: str
     ) -> Dict[str, Any]:
-        url = f"{self.base}/{offer_id}/validate"
+        url = f"{self.base}/internal/offers/{offer_id}/validate"
 
         async with _client() as c:
-            r = await c.post(url, params={"user_id": user_id})
-            r.raise_for_status()
-            return r.json()
+            try:
+                r = await c.post(url, params={"user_id": user_id})
+                r.raise_for_status()
+                return r.json()
+            except httpx.HTTPStatusError as e:
+                
+                return e.response.json()

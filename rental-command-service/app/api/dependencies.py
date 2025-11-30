@@ -6,8 +6,7 @@ from fastapi import Depends, Header
 from sqlalchemy.ext.asyncio import (AsyncSession, async_sessionmaker,
                                     create_async_engine)
 from sqlalchemy.orm import declarative_base
-
-from app.db.db import _get_sessionmaker, pick_shard_by_user
+from app.db.db import get_db
 from app.infrastructure.clients.offer_client import OfferClient
 from app.infrastructure.clients.payments_adapter_client import PaymentsAdapter
 from app.infrastructure.clients.stations_adapter_client import StationsAdapter
@@ -42,13 +41,6 @@ async def get_stations_adapter():
     return _stations_adapter
 
 
-async def get_db(user_id: UUID):
-    shard_name = pick_shard_by_user(user_id)
-    SessionLocal = _get_sessionmaker(shard_name)
-    async with SessionLocal() as session:
-        yield session
-
-
 def get_user_id(authorization: str = Header(None)) -> UUID:
     if not authorization:
         raise HTTPException(
@@ -64,13 +56,8 @@ def get_user_id(authorization: str = Header(None)) -> UUID:
         )
 
 
-async def get_sharded_db(user_id: UUID = Depends(get_user_id)):
-    async for session in get_db(user_id):
-        yield session
-
-
 async def get_rental_command_repository(
-    db: AsyncSession = Depends(get_sharded_db),
+    db: AsyncSession = Depends(get_db),
 ) -> RentalRepository:
     return RentalRepository(db)
 

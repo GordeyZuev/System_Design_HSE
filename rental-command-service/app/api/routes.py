@@ -1,6 +1,6 @@
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import get_rental_command_service, get_user_id
@@ -9,6 +9,7 @@ from app.infrastructure.clients.stations_adapter_client import StationsAdapter
 from app.schemas import (FinishRentalRequest, FinishRentalResponse,
                          StartRentalRequest, StartRentalResponse, RentalInfoResponse)
 from app.services.rental_service import RentalService
+from app.domain.exception import RentalNotFoundException
 
 router = APIRouter(prefix="/internal/rentals", tags=["rentals"])
 
@@ -63,4 +64,16 @@ async def get_rental(
     user_id: UUID = Depends(get_user_id),
     service: RentalService = Depends(get_rental_command_service)
 ):
-    return await service.get_rental_info(user_id, rental_id)
+    try:
+        rental_info = await service.get_rental_info(user_id, rental_id)
+        return rental_info
+    except RentalNotFoundException:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Rental with id {rental_id} for user {user_id} not found"
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e)
+        )
