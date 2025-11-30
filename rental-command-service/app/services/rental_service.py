@@ -170,11 +170,11 @@ class RentalService:
         
         if str(rental.user_id) != str(user_id):
             raise UserIdsMismatchException(str(rental.user_id), str(user_id))
-
+        tariff = rental.tariff_snapshot or {}
         started = rental.started_at
         finished = rental.finished_at
-        initial_fee = Decimal(str(0))
-        per_minute = Decimal(str(0))
+        initial_fee = Decimal(str("50"))
+        per_minute = Decimal(str(tariff.get("base_rate", 0)))
 
         if finished:
             current_cost = initial_fee + per_minute * Decimal(minutes_between(started, finished))
