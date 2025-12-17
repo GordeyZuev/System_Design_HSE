@@ -1400,29 +1400,10 @@ ORDER BY total_revenue DESC;
 ## Roadmap и Future Enhancements
 
 ### Phase 1: MVP (Текущее ДЗ)
-- ✅ RAW, ODS, DDS, DataMart слои
-- ✅ 4 DAG в Airflow (ingestion, ODS, DDS, Mart refresh)
-- ✅ 6 метрик в дашборде Metabase
-- ✅ Документация таблиц
-
-### Phase 2: Production Readiness (Следующий квартал)
-- Great Expectations data quality checks
-- Алерты в Grafana при сбоях ETL
-- Incremental ETL вместо full reload
-- Automated partition management
-- CI/CD для Airflow DAGs
-
-### Phase 3: Advanced Analytics (6 месяцев)
-- Machine Learning модели (прогноз спроса, churn prediction)
-- Feature Store на базе DDS
-- Real-time dashboard (если бизнес потребует)
-- Миграция на ClickHouse при росте данных
-
-### Phase 4: Enterprise Features (1 год)
-- Data Catalog (Apache Atlas / Amundsen)
-- Data Lineage visualization
-- Self-service BI для бизнес-пользователей
-- Федеративные запросы к внешним источникам (Presto/Trino)
+- RAW, ODS, DDS, DataMart слои
+- 4 DAG в Airflow (ingestion, ODS, DDS, Mart refresh)
+- 6 метрик в дашборде Metabase
+- Документация таблиц
 
 ---
 
