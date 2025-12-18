@@ -1,4 +1,5 @@
-CREATE SCHEMA IF NOT EXISTS dds;
+DROP SCHEMA IF EXISTS dds CASCADE;
+CREATE SCHEMA dds;
 
 
 CREATE TABLE dds.dim_users (
@@ -90,10 +91,9 @@ CREATE INDEX idx_dim_tariff_type ON dds.dim_tariff(tariff_type);
 
 
 CREATE TABLE dds.fact_rentals (
-    rental_dwh_id SERIAL PRIMARY KEY,
-    rental_id UUID UNIQUE NOT NULL,
+    rental_dwh_id SERIAL,  -- просто уникальный идентификатор
+    rental_id UUID NOT NULL,
     
-    -- Foreign Keys to Dimensions
     user_dwh_id INTEGER REFERENCES dds.dim_users(user_dwh_id),
     station_dwh_id INTEGER REFERENCES dds.dim_stations(station_dwh_id),
     start_date_id INTEGER REFERENCES dds.dim_date(date_id),
@@ -102,66 +102,44 @@ CREATE TABLE dds.fact_rentals (
     end_time_id INTEGER REFERENCES dds.dim_time(time_id),
     tariff_dwh_id INTEGER REFERENCES dds.dim_tariff(tariff_dwh_id),
     
-    -- Degenerate dimensions
     offer_id UUID NOT NULL,
     
-    -- Measures (Metrics)
     started_at TIMESTAMP WITH TIME ZONE NOT NULL,
     finished_at TIMESTAMP WITH TIME ZONE,
     duration_minutes INTEGER,
     final_cost NUMERIC(10, 2),
     status VARCHAR(50),
     
-    -- Calculated metrics
     is_completed BOOLEAN GENERATED ALWAYS AS (status = 'FINISHED') STORED,
     is_cancelled BOOLEAN GENERATED ALWAYS AS (status = 'CANCELLED') STORED,
     
-    -- Technical fields
     dw_loaded_at TIMESTAMP DEFAULT NOW(),
-    dw_updated_at TIMESTAMP DEFAULT NOW()
+    dw_updated_at TIMESTAMP DEFAULT NOW(),
+    
+    PRIMARY KEY (rental_id, start_date_id)
 ) PARTITION BY RANGE (start_date_id);
 
-CREATE INDEX idx_fact_rentals_user ON dds.fact_rentals(user_dwh_id);
-CREATE INDEX idx_fact_rentals_station ON dds.fact_rentals(station_dwh_id);
-CREATE INDEX idx_fact_rentals_start_date ON dds.fact_rentals(start_date_id);
-CREATE INDEX idx_fact_rentals_status ON dds.fact_rentals(status);
-CREATE INDEX idx_fact_rentals_offer_id ON dds.fact_rentals(offer_id);
-
--- Партиции по месяцам (примеры)
-CREATE TABLE dds.fact_rentals_202501 PARTITION OF dds.fact_rentals
-    FOR VALUES FROM (20250101) TO (20250201);
-CREATE TABLE dds.fact_rentals_202502 PARTITION OF dds.fact_rentals
-    FOR VALUES FROM (20250201) TO (20250301);
--- ... создаются автоматически через ETL
 
 
 CREATE TABLE dds.fact_offers (
-    offer_dwh_id SERIAL PRIMARY KEY,
-    offer_id UUID UNIQUE NOT NULL,
+    offer_dwh_id SERIAL,
+    offer_id UUID NOT NULL,
     
-    -- Foreign Keys
     user_dwh_id INTEGER REFERENCES dds.dim_users(user_dwh_id),
     station_dwh_id INTEGER REFERENCES dds.dim_stations(station_dwh_id),
     created_date_id INTEGER REFERENCES dds.dim_date(date_id),
     created_time_id INTEGER REFERENCES dds.dim_time(time_id),
     tariff_dwh_id INTEGER REFERENCES dds.dim_tariff(tariff_dwh_id),
     
-    -- Measures
     created_at TIMESTAMP NOT NULL,
     expires_at TIMESTAMP NOT NULL,
-    status VARCHAR(50), -- ACTIVE, USED, EXPIRED
+    status VARCHAR(50),
     
-    -- Calculated
-    ttl_seconds INTEGER, -- expires_at - created_at
+    ttl_seconds INTEGER,
     is_used BOOLEAN GENERATED ALWAYS AS (status = 'USED') STORED,
     is_expired_unused BOOLEAN GENERATED ALWAYS AS (status = 'EXPIRED') STORED,
     
-    dw_loaded_at TIMESTAMP DEFAULT NOW()
+    dw_loaded_at TIMESTAMP DEFAULT NOW(),
+    
+    PRIMARY KEY (offer_id, created_date_id)  -- PK включает колонку партиции
 ) PARTITION BY RANGE (created_date_id);
-
-CREATE INDEX idx_fact_offers_user ON dds.fact_offers(user_dwh_id);
-CREATE INDEX idx_fact_offers_station ON dds.fact_offers(station_dwh_id);
-CREATE INDEX idx_fact_offers_created_date ON dds.fact_offers(created_date_id);
-CREATE INDEX idx_fact_offers_status ON dds.fact_offers(status);
-
-
