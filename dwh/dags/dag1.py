@@ -123,8 +123,24 @@ load_offer_audit = PostgresOperator(
     dag=dag,
 )
 
-
+'''
 load_users_task >> [load_offers_shard_0, load_offers_shard_1]
 [load_offers_shard_0, load_offers_shard_1] >> [load_rentals_shard_0, load_rentals_shard_1]
 [load_rentals_shard_0, load_rentals_shard_1] >> load_rental_events
 [load_offers_shard_0, load_offers_shard_1] >> load_offer_audit
+'''
+for task in [load_offers_shard_0, load_offers_shard_1]:
+    load_users_task >> task
+
+
+for upstream in [load_offers_shard_0, load_offers_shard_1]:
+    for downstream in [load_rentals_shard_0, load_rentals_shard_1]:
+        upstream >> downstream
+
+
+for task in [load_rentals_shard_0, load_rentals_shard_1]:
+    task >> load_rental_events
+
+
+for task in [load_offers_shard_0, load_offers_shard_1]:
+    task >> load_offer_audit
