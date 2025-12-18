@@ -17,6 +17,79 @@ services:
       - offer-service
       - rental-cmd-service
 
+  dwh-postgres:
+    image: postgres:15
+    container_name: dwh-postgres
+    environment:
+      POSTGRES_DB: dwh
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    volumes:
+      - ./dwh/sql/init_db:/docker-entrypoint-initdb.d
+      - dwh_data:/var/lib/postgresql/data
+  airflow-postgres:
+    image: postgres:15
+    container_name: airflow-postgres
+    environment:
+      POSTGRES_DB: airflow
+      POSTGRES_USER: airflow
+      POSTGRES_PASSWORD: airflow
+    volumes:
+      - airflow_data:/var/lib/postgresql/data
+  airflow-webserver:
+    image: apache/airflow:2.7.1
+    container_name: airflow-webserver
+    environment:
+      - AIRFLOW__CORE__LOAD_EXAMPLES=False
+      - AIRFLOW__CORE__DAGS_FOLDER=/opt/airflow/dags
+      - AIRFLOW__CORE__EXECUTOR=LocalExecutor
+      - AIRFLOW__CORE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@airflow-postgres:5432/airflow
+
+
+      - AIRFLOW_CONN_DWH_POSTGRES=postgres://postgres:postgres@dwh-postgres:5432/dwh
+
+      - AIRFLOW_CONN_OFFER_SERVICE_SHARD_0=postgres://postgres:postgres@offer-db-shard0-master:5432/offer
+      - AIRFLOW_CONN_OFFER_SERVICE_SHARD_1=postgres://postgres:postgres@offer-db-shard1-master:5432/offer
+
+      - AIRFLOW_CONN_RENTAL_SERVICE_SHARD_0=postgres://postgres:postgres@rental-db-shard0-master:5432/rental
+      - AIRFLOW_CONN_RENTAL_SERVICE_SHARD_1=postgres://postgres:postgres@rental-db-shard1-master:5432/rental
+
+    volumes:
+      - ./dwh/dags:/opt/airflow/dags
+      - ./plugins:/opt/airflow/plugins
+    ports:
+      - "8080:8080"
+    depends_on:
+      - dwh-postgres
+      - offer-db-shard0-master
+      - offer-db-shard1-master
+      - rental-db-shard0-master
+      - rental-db-shard1-master
+    command: webserver
+
+  airflow-scheduler:
+    image: apache/airflow:2.7.1
+    container_name: airflow-scheduler
+    environment:
+      - AIRFLOW__CORE__LOAD_EXAMPLES=False
+      - AIRFLOW__CORE__DAGS_FOLDER=/opt/airflow/dags
+      - AIRFLOW__CORE__EXECUTOR=LocalExecutor
+      - AIRFLOW__CORE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@airflow-postgres:5432/airflow
+
+    volumes:
+      - ./dags:/opt/airflow/dags
+      - ./plugins:/opt/airflow/plugins
+    depends_on:
+      - airflow-webserver
+      - dwh-postgres
+      - offer-db-shard0-master
+      - offer-db-shard1-master
+      - rental-db-shard0-master
+      - rental-db-shard1-master
+    command: scheduler
+
+    
+
   # User Service (Auth & Profile)
   user-service:
     build:
@@ -212,4 +285,6 @@ volumes:
   offer_db_shard1_master_data:
   rental_replica2_data:
   offer_db_replica2_data:
+  dwh_data:
+  airflow_data:
 
