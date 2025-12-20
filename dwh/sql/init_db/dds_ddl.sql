@@ -9,7 +9,6 @@ CREATE TABLE dds.dim_users (
     phone VARCHAR(50),
     status VARCHAR(50),
     user_created_at TIMESTAMP,
-    -- SCD Type 2 fields
     valid_from TIMESTAMP NOT NULL DEFAULT NOW(),
     valid_to TIMESTAMP DEFAULT '9999-12-31',
     is_current BOOLEAN DEFAULT TRUE,
@@ -25,10 +24,9 @@ CREATE INDEX idx_dim_users_status ON dds.dim_users(status) WHERE is_current = TR
 CREATE TABLE dds.dim_stations (
     station_dwh_id SERIAL PRIMARY KEY,
     station_id VARCHAR(255) UNIQUE NOT NULL,
-    station_name VARCHAR(255), -- можно обогатить из внешнего справочника
+    station_name VARCHAR(255),
     city VARCHAR(100),
     region VARCHAR(100),
-    -- Для будущего обогащения
     latitude NUMERIC(10, 8),
     longitude NUMERIC(11, 8),
     dw_loaded_at TIMESTAMP DEFAULT NOW()
@@ -40,7 +38,7 @@ CREATE INDEX idx_dim_stations_city ON dds.dim_stations(city);
 
 
 CREATE TABLE dds.dim_date (
-    date_id INTEGER PRIMARY KEY, -- YYYYMMDD
+    date_id INTEGER PRIMARY KEY,
     date_actual DATE NOT NULL UNIQUE,
     day_of_week INTEGER,
     day_name VARCHAR(10),
@@ -51,24 +49,76 @@ CREATE TABLE dds.dim_date (
     quarter INTEGER,
     year INTEGER,
     is_weekend BOOLEAN,
-    is_holiday BOOLEAN DEFAULT FALSE -- можно обогатить календарём праздников
+    is_holiday BOOLEAN DEFAULT FALSE
 );
 
 CREATE INDEX idx_dim_date_date_actual ON dds.dim_date(date_actual);
 CREATE INDEX idx_dim_date_year_month ON dds.dim_date(year, month_num);
 
 
+TRUNCATE dds.dim_date;
+
+
+INSERT INTO dds.dim_date (
+    date_id, date_actual, day_of_week, day_name, day_of_month,
+    week_of_year, month_num, month_name, quarter, year, is_weekend
+)
+SELECT
+    TO_CHAR(d, 'YYYYMMDD')::INTEGER AS date_id,
+    d AS date_actual,
+    EXTRACT(ISODOW FROM d) AS day_of_week,
+    TO_CHAR(d, 'Day') AS day_name,
+    EXTRACT(DAY FROM d) AS day_of_month,
+    EXTRACT(WEEK FROM d) AS week_of_year,
+    EXTRACT(MONTH FROM d) AS month_num,
+    TO_CHAR(d, 'Month') AS month_name,
+    EXTRACT(QUARTER FROM d) AS quarter,
+    EXTRACT(YEAR FROM d) AS year,
+    CASE WHEN EXTRACT(ISODOW FROM d) IN (6, 7) THEN TRUE ELSE FALSE END AS is_weekend
+FROM generate_series(
+    DATE '2020-01-01',
+    DATE '2030-12-31',
+    INTERVAL '1 day'
+) AS d
+ON CONFLICT DO NOTHING;
+
+
 CREATE TABLE dds.dim_time (
-    time_id INTEGER PRIMARY KEY, -- HHMMSS (e.g., 143000 for 14:30:00)
+    time_id INTEGER PRIMARY KEY,
     time_actual TIME NOT NULL UNIQUE,
     hour INTEGER,
     minute INTEGER,
-    hour_of_day VARCHAR(20), -- '00-06', '06-12', '12-18', '18-24'
-    is_business_hours BOOLEAN -- 09:00-18:00
+    hour_of_day VARCHAR(20),
+    is_business_hours BOOLEAN
 );
 
 CREATE INDEX idx_dim_time_hour ON dds.dim_time(hour);
 
+
+
+INSERT INTO dds.dim_time (
+    time_id,
+    time_actual,
+    hour,
+    minute,
+    hour_of_day,
+    is_business_hours
+)
+SELECT
+    (h * 10000 + m * 100)::INTEGER AS time_id,
+    MAKE_TIME(h, m, 0) AS time_actual,
+    h AS hour,
+    m AS minute,
+    CASE 
+        WHEN h BETWEEN 9 AND 17 THEN 'Business Hours'
+        ELSE 'Outside Hours'
+    END AS hour_of_day,
+    (h BETWEEN 9 AND 17) AS is_business_hours
+FROM
+    generate_series(0, 23) AS h,
+    generate_series(0, 59) AS m
+ORDER BY h, m
+ON CONFLICT DO NOTHING;
 
 
 CREATE TABLE dds.dim_tariff (
@@ -77,8 +127,8 @@ CREATE TABLE dds.dim_tariff (
     tariff_snapshot JSONB NOT NULL,
     rate_per_minute NUMERIC(10, 4),
     currency VARCHAR(10),
-    tariff_type VARCHAR(50), -- 'standard', 'premium', 'promo'
-    -- Для анализа
+    tariff_type VARCHAR(50),
+
     valid_from TIMESTAMP,
     valid_to TIMESTAMP DEFAULT '9999-12-31',
     dw_loaded_at TIMESTAMP DEFAULT NOW(),
@@ -91,8 +141,8 @@ CREATE INDEX idx_dim_tariff_type ON dds.dim_tariff(tariff_type);
 
 
 CREATE TABLE dds.fact_rentals (
-    rental_dwh_id SERIAL,  -- просто уникальный идентификатор
-    rental_id UUID NOT NULL,
+    rental_dwh_id SERIAL,
+    rental_id UUID PRIMARY KEY,
     
     user_dwh_id INTEGER REFERENCES dds.dim_users(user_dwh_id),
     station_dwh_id INTEGER REFERENCES dds.dim_stations(station_dwh_id),
@@ -114,16 +164,14 @@ CREATE TABLE dds.fact_rentals (
     is_cancelled BOOLEAN GENERATED ALWAYS AS (status = 'CANCELLED') STORED,
     
     dw_loaded_at TIMESTAMP DEFAULT NOW(),
-    dw_updated_at TIMESTAMP DEFAULT NOW(),
-    
-    PRIMARY KEY (rental_id, start_date_id)
-) PARTITION BY RANGE (start_date_id);
+    dw_updated_at TIMESTAMP DEFAULT NOW()
+);
 
 
 
 CREATE TABLE dds.fact_offers (
     offer_dwh_id SERIAL,
-    offer_id UUID NOT NULL,
+    offer_id UUID PRIMARY KEY,
     
     user_dwh_id INTEGER REFERENCES dds.dim_users(user_dwh_id),
     station_dwh_id INTEGER REFERENCES dds.dim_stations(station_dwh_id),
@@ -139,7 +187,5 @@ CREATE TABLE dds.fact_offers (
     is_used BOOLEAN GENERATED ALWAYS AS (status = 'USED') STORED,
     is_expired_unused BOOLEAN GENERATED ALWAYS AS (status = 'EXPIRED') STORED,
     
-    dw_loaded_at TIMESTAMP DEFAULT NOW(),
-    
-    PRIMARY KEY (offer_id, created_date_id)  -- PK включает колонку партиции
-) PARTITION BY RANGE (created_date_id);
+    dw_loaded_at TIMESTAMP DEFAULT NOW()
+);

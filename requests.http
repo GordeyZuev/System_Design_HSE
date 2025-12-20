@@ -1,0 +1,20 @@
+
+POST http://localhost/take-away/users/auth/login
+Content-Type: application/json
+
+{
+    "email": "test1@example.com",
+    "password": "testpassword123"
+}
+
+###
+
+
+POST http://localhost/take-away/internal/offers/
+Content-Type: application/json
+
+{
+    "user_id": "82441cc4-d9b5-43c1-9c25-6eff2fbbc33f",
+    "station_id": "station-001",
+    "user_segment": "STANDARD"
+}

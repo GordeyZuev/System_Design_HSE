@@ -23,7 +23,7 @@ services:
     environment:
       POSTGRES_DB: dwh
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
+      POSTGRES_PASSWORD: adminpass
     volumes:
       - ./dwh/sql/init_db:/docker-entrypoint-initdb.d
       - dwh_data:/var/lib/postgresql/data
@@ -45,6 +45,7 @@ services:
     container_name: airflow-webserver
     environment:
       AIRFLOW__CORE__LOAD_EXAMPLES: "False"
+      AIRFLOW__WEBSERVER__SECRET_KEY: a3f1c9d7b2e44f3d8f9c8b1d5e9a1234567890abcdef1234567890abcdef
       AIRFLOW__CORE__DAGS_FOLDER: /opt/airflow/dags
       AIRFLOW__CORE__EXECUTOR: LocalExecutor
       AIRFLOW__CORE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@airflow-postgres:5432/airflow
@@ -72,6 +73,7 @@ services:
     container_name: airflow-scheduler
     environment:
       AIRFLOW__CORE__LOAD_EXAMPLES: "False"
+      AIRFLOW__WEBSERVER__SECRET_KEY: a3f1c9d7b2e44f3d8f9c8b1d5e9a1234567890abcdef1234567890abcdef
       AIRFLOW__CORE__DAGS_FOLDER: /opt/airflow/dags
       AIRFLOW__CORE__EXECUTOR: LocalExecutor
       AIRFLOW__CORE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@airflow-postgres:5432/airflow
@@ -87,6 +89,27 @@ services:
       - rental-db-shard0-master
       - rental-db-shard1-master
     command: scheduler
+
+  airflow-init:
+    image: apache/airflow:2.7.1
+    container_name: airflow-init
+    depends_on:
+      - airflow-postgres
+    environment:
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__CORE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@airflow-postgres:5432/airflow
+      AIRFLOW__WEBSERVER__SECRET_KEY: a3f1c9d7b2e44f3d8f9c8b1d5e9a1234567890abcdef1234567890abcdef
+    command: >
+      bash -c "
+      airflow db migrate &&
+      airflow users create
+        --username admin 
+        --firstname Admin 
+        --lastname User 
+        --role Admin 
+        --email admin@example.com 
+        --password admin
+      "
 
     
 
